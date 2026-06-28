@@ -18,6 +18,9 @@ results, and do NOT recompute any metric.
 4. Run, capturing only summaries (append `2>&1 | tail -n 25`):
    - `python Agent/shared/export_supplementary.py "{network}"`
    - `python Agent/shared/network_to_cytoscape.py "{network}"`
+   - `python Agent/shared/network_to_visual.py "{network}"`  (website-faithful HTML + SVG + PNG into
+     `network/visual/`; SVG/PNG need `Agent/shared/visual` `npm install` — if absent it still writes the
+     HTML and prints a hint, never fails)
    - `python Agent/shared/record_provenance.py "{network}" --step 6 --model claude-haiku-4-5`
    - (cross-network, optional) `python Agent/shared/export_all_csvs.py . --output Fig_Data` and
      `python Agent/shared/export_master_csv.py . --output Fig_Data` — note if the corpus layout doesn't
@@ -26,5 +29,5 @@ results, and do NOT recompute any metric.
    Read only `supplementary/Fig_Data/network_summary.csv` for the headline row — do not read the big CSVs.
 
 **Return ONLY**: the paper-ready headline (best method, accuracy, κ + band, FRS/DARS + bands, N/E/T),
-confirmation that all tables + Fig_Data + Cytoscape exist, and any skipped cross-network merges. Under
-~15 lines.
+confirmation that all tables + Fig_Data + Cytoscape + `network/visual/` (HTML always; SVG/PNG if the Node
+toolchain is installed) exist, and any skipped cross-network merges. Under ~15 lines.

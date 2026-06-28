@@ -46,6 +46,8 @@ list-of-dicts), `validation/accuracy_metrics.json`.
   `evidence_per_edge.csv`, `master_test_level.csv`, `all_networks_test_level.csv` (8 CSVs).
 - **Cytoscape** (`{network}/network/cytoscape/`): `network.graphml`, `network.sif`,
   `node_attributes.txt` (node type + colour — **DRUG nodes get a distinct colour**), `edge_attributes.txt`.
+- **Visualisation** (`{network}/network/visual/`): `network.html` (interactive, clickable — click a node
+  for its function + edge DOIs; single shareable file), `network.svg`, `network.png` (website-faithful static renders).
 - **Cross-network merged** (`Fig_Data/` at project root): 8 per-network CSVs concatenated across every
   completed readout network (e.g. `cell_proliferation_egfr_network`, `apoptosis_p53_network`,
   `tumor_growth_kras_network`, `phospho_akt_network`). `Fig_Data/master_test_level.csv` drives figures.
@@ -56,6 +58,7 @@ list-of-dicts), `validation/accuracy_metrics.json`.
 2. **Pre-flight `method_comparison.json`.** Must be a **list-of-dicts** (one entry/method, each with ≥ `method`, `accuracy`, `kappa`, `mcc`). If a single dict, convert and re-validate (`validate_schema.py --network {network}`).
 3. **Supplementary + Fig_Data.** `python Agent/shared/export_supplementary.py "{network}"`. Confirm all 11 tables + 8 Fig_Data CSVs exist and are non-empty.
 4. **Cytoscape.** `python Agent/shared/network_to_cytoscape.py "{network}"`. Exports from the **current** `network/network.json` — if exporting a refined model, copy it into `network/network.json` first. Verify GraphML node/edge counts match the best model (Rule 8 — no disconnected nodes).
+4b. **Visualisation (HTML + SVG + PNG).** `python Agent/shared/network_to_visual.py "{network}"`. Reads the current `network/network.json` and writes `network/visual/network.html` (interactive, clickable, DOI links), `network.svg`, `network.png`, styled by node type from `Agent/shared/visual/assets/flashp_style.json` (website vizmap). Static SVG/PNG need `cd Agent/shared/visual && npm install`; if the Node toolchain is absent it still writes the HTML and prints a hint — never fails. Note whether SVG/PNG were produced or skipped.
 5. **Cross-network merge.** `python Agent/shared/export_all_csvs.py . --output Fig_Data` then `python Agent/shared/export_master_csv.py . --output Fig_Data`. Incomplete networks are silently skipped — confirm in stdout all expected networks merged.
 6. **Provenance.** `python Agent/shared/record_provenance.py "{network}" --step 6 --model claude-opus-4-7`.
 7. **Verify + report.** Read `network_summary.csv` headline row; cross-check FRS/DARS against `validation/{best_method}_validation_results.json` `metrics.frs`/`metrics.dars`. Confirm 11 tables, 8 Fig_Data CSVs, 4 Cytoscape files, 8 root merged CSVs, new provenance entry.

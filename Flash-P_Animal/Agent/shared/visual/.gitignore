@@ -1,0 +1,3 @@
+# Installed dependencies + Puppeteer's bundled Chromium — restore with `npm install`.
+# package-lock.json IS committed for reproducibility.
+node_modules/

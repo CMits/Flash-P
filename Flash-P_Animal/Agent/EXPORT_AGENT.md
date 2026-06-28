@@ -62,6 +62,10 @@ DARS+band, best κ+band, best accuracy), `accuracy_summary.csv`, `complexity_acc
 ### Cytoscape (`{network}/network/cytoscape/`)
 `network.graphml`, `network.sif`, `node_attributes.txt`, `edge_attributes.txt`.
 
+### Visualisation (`{network}/network/visual/`)
+`network.html` (interactive, clickable — click a node for its function + edge DOIs; single shareable file),
+`network.svg`, `network.png` (website-faithful static renders).
+
 ### Cross-network merged (`Fig_Data/` at project root)
 All 8 per-network CSVs concatenated across every completed trait folder in the repo
 (e.g. `Height`, `Coat_Colour`, `Muscle_Mass`, `Milk_Yield`, `Feed_Efficiency`).
@@ -93,6 +97,14 @@ and the per-network `Fig_Data/` CSVs. Confirm every §Output file exists and is 
 `python Agent/shared/network_to_cytoscape.py "{network}"` — from the **current** `network/network.json`.
 If exporting a refined model, copy the refined network into `network/network.json` first so the graph
 reflects the best model. Verify node/edge counts match (Rule 8 — no disconnected nodes).
+
+### Step 4b — Website-faithful visualisation (HTML + SVG + PNG)
+`python Agent/shared/network_to_visual.py "{network}"` — reads the **current** `network/network.json` and
+writes `network/visual/network.html` (interactive, clickable, DOI links), `network.svg`, and `network.png`,
+styled by node type from `Agent/shared/visual/assets/flashp_style.json` (the website vizmap). Static SVG/PNG
+need `cd Agent/shared/visual && npm install`; if the Node toolchain is absent the script still writes
+`network.html` (CDN libraries) and prints a hint — it never fails the export. Note in your summary whether
+SVG/PNG were produced or skipped (with the reason).
 
 ### Step 5 — Cross-network merged CSVs
 `python Agent/shared/export_all_csvs.py . --output Fig_Data`

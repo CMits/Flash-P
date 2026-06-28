@@ -84,6 +84,13 @@ Produce a complete, schema-compliant set of supplementary tables, Fig_Data CSVs,
 | `node_attributes.txt` | Node type + colour |
 | `edge_attributes.txt` | Edge sign, confidence, colour, DOI |
 
+### Visualisation (`{network}/network/visual/`)
+| File | Content |
+|------|---------|
+| `network.html` | Interactive, clickable plot (website look) — click a node for its function + edge DOIs. Single self-contained shareable file. |
+| `network.svg` | Static vector render (publication figures) |
+| `network.png` | Static raster render (preview / thumbnail) |
+
 ### Cross-network merged (`Fig_Data/` at project root)
 All 8 per-network CSVs concatenated across every completed phenotype network in the repo (e.g. `height_network`, `coat_colour_network`, `muscle_mass_network`, `milk_yield_network`, `feed_efficiency_network`). `Fig_Data/master_test_level.csv` is the main file for manuscript figures.
 
@@ -121,6 +128,17 @@ python Agent/shared/network_to_cytoscape.py "{network}"
 This generates `network/cytoscape/network.graphml`, `network.sif`, `node_attributes.txt`, and `edge_attributes.txt` from the **current** `network/network.json`. If you are exporting from a refined model, copy the refined network into `network/network.json` first (or pass the refined path explicitly if the script supports it) so the Cytoscape graph reflects the best model — never the pre-refinement network.
 
 Verify: open `network.graphml` and confirm node/edge counts match the best model (Hard Rule 8 — no disconnected nodes).
+
+### Step 4b — Website-faithful visualisation (HTML + SVG + PNG)
+```bash
+python Agent/shared/network_to_visual.py "{network}"
+```
+Reads the **current** `network/network.json` (the best model, after Step 4's copy) and writes
+`network/visual/network.html` (interactive, clickable, DOI links), `network.svg`, and `network.png`,
+styled by node type from `Agent/shared/visual/assets/flashp_style.json` (the website vizmap). The static
+SVG/PNG are rendered by headless Cytoscape and require `cd Agent/shared/visual && npm install`; if the Node
+toolchain is absent the script still writes `network.html` (CDN libraries) and prints a hint — it never
+fails the export. Note in your summary whether SVG/PNG were produced or skipped (with the reason).
 
 ### Step 5 — Cross-network merged CSVs
 ```bash
