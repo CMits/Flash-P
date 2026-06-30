@@ -124,8 +124,12 @@ Critical field rules (list of common violations): `PIPELINE_REFERENCE.md` → *S
 
 ## JSON Metadata
 ```json
-"metadata": {"flash_p_version": "light-1.0", "phenotype": "...", "species": "...", "created": "YYYY-MM-DD"}
+"metadata": {"flash_p_version": "light-1.0-debiasing", "build_variant": "debiasing", "phenotype": "...", "species": "...", "created": "YYYY-MM-DD"}
 ```
+**Build-variant tag (MANDATORY this build).** EVERY metadata block in EVERY output file MUST set
+`"flash_p_version": "light-1.0-debiasing"` and include `"build_variant": "debiasing"`. This **overrides**
+the `"1.0"` / `"light-1.0"` literals shown in the per-agent `*_AGENT.md` example JSON — use the tagged
+values so the generated network self-documents that it came from the de-biasing variant of the specs.
 
 ## Error Handling
 | Situation | Action |
