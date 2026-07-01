@@ -13,6 +13,7 @@
   <a href="#what-is-flash-p">What it is</a> &nbsp;&middot;&nbsp;
   <a href="#versions">Versions</a> &nbsp;&middot;&nbsp;
   <a href="#how-to-run">How to run</a> &nbsp;&middot;&nbsp;
+  <a href="#commands">Commands</a> &nbsp;&middot;&nbsp;
   <a href="#whats-in-this-repo">Repo</a> &nbsp;&middot;&nbsp;
   <a href="#flash-p-gui--coming-soon">GUI</a>
 </p>
@@ -108,6 +109,26 @@ Run the full FLASH-P pipeline for <trait> in <species>.
 >
 > **Medical & Animal** currently ship the Claude Code setup (`CLAUDE.md` + `Agent/`); open that
 > folder in Claude Code and use the same `/run-flashp` command.
+
+---
+
+## Commands
+
+Once your agent is running in a version folder (e.g. `Flash-P_Plant/Claude`), these slash commands are
+available. Run **`/run-flashp-help`** at any time to print this list from inside Claude Code.
+
+| Command | What it does | Usage |
+|---|---|---|
+| `/run-flashp` | Autonomously run the full pipeline (Steps 1&rarr;6) for a trait and write the network, validation, and supplementary tables into `networks/<trait>/`. | `/run-flashp <trait> in <species>` |
+| `/run-flashp-visualise` | Render a built network as a website-faithful **interactive HTML** (clickable, DOI links) plus static SVG + PNG. | `/run-flashp-visualise <network dir>` |
+| `/run-flashp-perturb` | Build the **FLASH-P Studio** &mdash; one self-contained, offline HTML app to browse, view, and **perturbate** all your networks (KO/KD/OE + treatments; Algebraic / RWR / ODE solvers, live charts). | `/run-flashp-perturb <networks dir>` |
+| `/run-flashp-epistasis` | Gene &times; gene epistasis scan over an existing network &mdash; every single + double perturbation, classified by interaction. *(Plant)* | `/run-flashp-epistasis <network dir>` |
+| `/run-flashp-gxe` | Gene &times; environment (G&times;E) scan over an existing network &mdash; dose-swept, with a report. *(Plant)* | `/run-flashp-gxe <network dir>` |
+| `/run-flashp-help` | Print this command list from inside Claude Code (auto-generated from the commands available in the folder). | `/run-flashp-help` |
+
+> `/run-flashp`, `/run-flashp-visualise`, `/run-flashp-perturb`, and `/run-flashp-help` ship in **Plant,
+> Animal, and Medical**; `/run-flashp-epistasis` and `/run-flashp-gxe` currently ship in the **Plant**
+> variant.
 
 ---
 

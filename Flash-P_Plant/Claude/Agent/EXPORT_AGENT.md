@@ -140,6 +140,18 @@ SVG/PNG are rendered by headless Cytoscape and require `cd Agent/shared/visual &
 toolchain is absent the script still writes `network.html` (CDN libraries) and prints a hint — it never
 fails the export. Note in your summary whether SVG/PNG were produced or skipped (with the reason).
 
+### Step 4c — Refresh the FLASH-P Studio (browse + view + simulate)
+```bash
+python Agent/shared/network_to_studio.py "<networks_dir>"
+```
+`<networks_dir>` is the **parent** folder that contains all trait networks (i.e. the directory holding
+`{network}`, normally `networks`). This rebuilds `<networks_dir>/Flash-P_Studio.html` — one self-contained,
+offline HTML app embedding **every** built network, so the just-exported network is added automatically and
+the user can browse, view (DOIs), and **perturbate** all networks (KO/KD/OE + treatments; Algebraic / RWR /
+ODE) by double-click — no server. It reuses the same style map and each network's
+`validation/accuracy_metrics.json` for best-method parameters. Like Step 4b it never fails the export; note
+in your summary that the Studio was refreshed and how many networks it embedded.
+
 ### Step 5 — Cross-network merged CSVs
 ```bash
 python Agent/shared/export_all_csvs.py . --output Fig_Data

@@ -106,6 +106,15 @@ need `cd Agent/shared/visual && npm install`; if the Node toolchain is absent th
 `network.html` (CDN libraries) and prints a hint — it never fails the export. Note in your summary whether
 SVG/PNG were produced or skipped (with the reason).
 
+### Step 4c — Refresh the FLASH-P Studio (browse + view + simulate)
+`python Agent/shared/network_to_studio.py "<networks_dir>"` where `<networks_dir>` is the **parent** folder
+containing all trait networks (the directory holding `{network}`, normally `networks`). Rebuilds
+`<networks_dir>/Flash-P_Studio.html` — one self-contained, offline HTML app embedding **every** built
+network, so the just-exported network is added automatically and the user can browse, view (DOIs), and
+**perturbate** all networks (KO/KD/OE + treatments; Algebraic / RWR / ODE) by double-click — no server. It
+reuses the same style map and each network's `validation/accuracy_metrics.json` for best-method parameters.
+Like Step 4b it never fails the export; note that the Studio was refreshed and how many networks it embedded.
+
 ### Step 5 — Cross-network merged CSVs
 `python Agent/shared/export_all_csvs.py . --output Fig_Data`
 `python Agent/shared/export_master_csv.py . --output Fig_Data`

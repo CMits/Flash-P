@@ -90,7 +90,9 @@ def build_payload(network_dir: Path) -> dict:
             print(f"  (annotations skipped: {e})")
 
     elements = []
+    node_ids = set()
     for n in net.get("nodes", []):
+        node_ids.add(n["id"])
         elements.append({"data": {
             "id": n["id"],
             "label": n["id"],
@@ -98,7 +100,13 @@ def build_payload(network_dir: Path) -> dict:
             "fn": n.get("full_name", "") or "",
             "src": bool(n.get("is_source")),
         }})
+    # Drop dangling edges (endpoint not in the node set) — Cytoscape throws on init
+    # if an edge references a nonexistent node, which would break the whole render.
+    dropped = 0
     for i, e in enumerate(net.get("edges", [])):
+        if e["source"] not in node_ids or e["target"] not in node_ids:
+            dropped += 1
+            continue
         elements.append({"data": {
             "id": e.get("edge_id") or f"e{i}",
             "source": e["source"],
@@ -107,6 +115,8 @@ def build_payload(network_dir: Path) -> dict:
             "sk": _sign_key(e.get("sign")),
             "doi": e.get("doi", "") or "",
         }})
+    if dropped:
+        print(f"  (skipped {dropped} dangling edge(s) with a missing endpoint node)")
 
     meta = net.get("metadata", {})
     style = json.loads(STYLE_FILE.read_text(encoding="utf-8"))
