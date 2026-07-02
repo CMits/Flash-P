@@ -10,6 +10,7 @@
 </p>
 
 <p align="center">
+  <a href="#tldr--run-it-in-4-steps">TL;DR</a> &nbsp;&middot;&nbsp;
   <a href="#what-is-flash-p">What it is</a> &nbsp;&middot;&nbsp;
   <a href="#versions">Versions</a> &nbsp;&middot;&nbsp;
   <a href="#how-to-run">How to run</a> &nbsp;&middot;&nbsp;
@@ -17,6 +18,24 @@
   <a href="#whats-in-this-repo">Repo</a> &nbsp;&middot;&nbsp;
   <a href="#flash-p-gui--coming-soon">GUI</a>
 </p>
+
+---
+
+## TL;DR — run it in 4 steps
+
+New here? This is the whole thing:
+
+1. **Download the repo** — green **`Code ▸ Download ZIP`** at the top of this page (or `git clone`),
+   then unzip it. Pick your version folder — start with **[`Flash-P_Plant/`](Flash-P_Plant)**.
+2. **Open a terminal in the `Claude` subfolder** of that version — i.e. inside
+   **`Flash-P_Plant/Claude/`** — and start **[Claude Code](https://claude.com/claude-code)** there
+   (run `claude`). That subfolder is the project root Claude Code should open.
+3. **Run a command** — e.g. `/run-flashp <trait> in <species>`. Don't want to approve every step?
+   Press **`shift + tab`** to turn on auto-accept and let it run.
+4. **Go do something fun ☕** — come back to a finished, DOI-backed network. Then
+   `/run-flashp-studio networks` to browse, perturb, and export it.
+
+Want the details? Keep reading. New to the commands? Run **`/run-flashp-help`** inside Claude Code.
 
 ---
 
@@ -58,8 +77,8 @@ Pick the folder for your domain, then open the subfolder for your coding agent.
 | Version | Use it for | Notes |
 |---|---|---|
 | **[`Flash-P_Plant/`](Flash-P_Plant)** | Plant & crop traits | **Start here.** The lean, current pipeline, tested most extensively. Ships Claude Code, Codex, and OpenCode variants. |
-| **[`Flash-P_Medical/`](Flash-P_Medical)** | Medical traits | Same pipeline, medical tuning. Works, but **not yet tested as extensively** as Plant. Claude Code setup. |
-| **[`Flash-P_Animal/`](Flash-P_Animal)** | Animal traits | Same pipeline, animal tuning. Works, but **not yet tested as extensively** as Plant. Claude Code setup. |
+| **[`Flash-P_Medical/`](Flash-P_Medical)** | Medical traits | 🚧 **Alpha.** Same pipeline, medical tuning. Works, but **not yet tested as extensively** as Plant. Claude Code setup. |
+| **[`Flash-P_Animal/`](Flash-P_Animal)** | Animal traits | 🚧 **Alpha.** Same pipeline, animal tuning. Works, but **not yet tested as extensively** as Plant. Claude Code setup. |
 | **[`Flash-P_Paper_Version/`](Flash-P_Paper_Version)** | Reproducing the manuscript | The **original** pipeline behind the paper &mdash; full provenance and multi-pass judges, so **heavy on tokens**. Kept for reproducibility. The current versions above are far leaner with the same science. |
 
 > **In short:** the current versions are very lean and fit a normal session; the paper version is
@@ -120,15 +139,13 @@ available. Run **`/run-flashp-help`** at any time to print this list from inside
 | Command | What it does | Usage |
 |---|---|---|
 | `/run-flashp` | Autonomously run the full pipeline (Steps 1&rarr;6) for a trait and write the network, validation, and supplementary tables into `networks/<trait>/`. | `/run-flashp <trait> in <species>` |
-| `/run-flashp-visualise` | Render a built network as a website-faithful **interactive HTML** (clickable, DOI links) plus static SVG + PNG. | `/run-flashp-visualise <network dir>` |
-| `/run-flashp-perturb` | Build the **FLASH-P Studio** &mdash; one self-contained, offline HTML app to browse, view, and **perturbate** all your networks (KO/KD/OE + treatments; Algebraic / RWR / ODE solvers, live charts). | `/run-flashp-perturb <networks dir>` |
+| `/run-flashp-studio` | Build the **FLASH-P Studio** &mdash; one self-contained, offline HTML app to browse, view (clickable, DOI links), **export** each network as PNG/SVG, and **perturbate** all your networks (KO/KD/OE + treatments; Algebraic / RWR / ODE solvers, live charts). | `/run-flashp-studio <networks dir>` |
 | `/run-flashp-epistasis` | Gene &times; gene epistasis scan over an existing network &mdash; every single + double perturbation, classified by interaction. *(Plant)* | `/run-flashp-epistasis <network dir>` |
 | `/run-flashp-gxe` | Gene &times; environment (G&times;E) scan over an existing network &mdash; dose-swept, with a report. *(Plant)* | `/run-flashp-gxe <network dir>` |
 | `/run-flashp-help` | Print this command list from inside Claude Code (auto-generated from the commands available in the folder). | `/run-flashp-help` |
 
-> `/run-flashp`, `/run-flashp-visualise`, `/run-flashp-perturb`, and `/run-flashp-help` ship in **Plant,
-> Animal, and Medical**; `/run-flashp-epistasis` and `/run-flashp-gxe` currently ship in the **Plant**
-> variant.
+> `/run-flashp`, `/run-flashp-studio`, and `/run-flashp-help` ship in **Plant, Animal, and Medical**;
+> `/run-flashp-epistasis` and `/run-flashp-gxe` currently ship in the **Plant** variant.
 
 ---
 

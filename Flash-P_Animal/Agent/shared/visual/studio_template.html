@@ -71,9 +71,8 @@
       box-shadow: 0 6px 18px rgba(0,0,0,.16); z-index: 60;
       opacity: 0; visibility: hidden; transition: opacity .12s; pointer-events: none; white-space: normal;
     }
-    .info.up::after { top: auto; bottom: calc(100% + 8px); }
-    .info.left::after { left: auto; right: 0; transform: none; }
-    .info:hover::after { opacity: 1; visibility: visible; }
+    /* CSS ::after tooltip is replaced by a position:fixed floating tip in JS (escapes overflow clipping). */
+    .info::after { display: none; }
 
     /* ---- top bar ---- */
     #topbar {
@@ -272,6 +271,9 @@
           <button id="view-zin" title="Zoom in">+</button>
           <button id="view-zout" title="Zoom out">&#8722;</button>
           <button id="view-labels" title="Toggle labels">T</button>
+          <span class="sep"></span>
+          <button id="view-png" title="Download network as PNG image">&#8681; PNG</button>
+          <button id="view-svg" title="Download network as SVG (vector)">&#8681; SVG</button>
         </div>
         <div class="vtitle">
           <div id="view-title"></div>
@@ -333,7 +335,7 @@
     function el(html) { var d = document.createElement('div'); d.innerHTML = html; return d.firstElementChild; }
     // Small hover "i" with a plain-text explanation. pos: '' | 'up' | 'left' | 'up left'.
     function info(tip, pos) {
-      return '<span class="info' + (pos ? ' ' + pos : '') + '" data-tip="' + esc(tip) + '" title="' + esc(tip) + '">i</span>';
+      return '<span class="info' + (pos ? ' ' + pos : '') + '" data-tip="' + esc(tip) + '">i</span>';
     }
     var TIPS = {
       method: 'How the perturbation spreads through the network. Algebraic (Flash-P): solves the steady-state equations — geometric-mean activation, bounded inhibition, with wild type = 1. RWR: random-walk with restart; scores how strongly (and which way) each node is pushed. ODE: integrates Hill-function dynamics to steady state. The method that scored best on this network is preselected.',
@@ -561,6 +563,15 @@
       };
       renderLegend(document.getElementById('view-legend'), viewApp);
       document.getElementById('view-tosim').onclick = function () { openSim(slug); };
+      var exportBg = function () { return document.documentElement.classList.contains('dark') ? '#0e1b1f' : '#fbfdfc'; };
+      document.getElementById('view-png').onclick = function () {
+        download(slug + '.png', viewApp.cy.png({ full: true, scale: 3, bg: exportBg() }));
+      };
+      document.getElementById('view-svg').onclick = function () {
+        if (!viewApp.cy.svg) { alert('SVG export unavailable (cytoscape-svg not loaded).'); return; }
+        var svg = viewApp.cy.svg({ full: true, bg: exportBg() });
+        download(slug + '.svg', 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg));
+      };
     }
 
     function renderLegend(lg, app) {
@@ -1023,6 +1034,42 @@
         }
       }, 180);
     });
+
+    // ---- image download helper ----
+    function download(name, dataUrl) {
+      var a = document.createElement('a');
+      a.href = dataUrl; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    }
+
+    // ---- floating tooltips (position:fixed so they escape every overflow/clip container) ----
+    (function () {
+      var tip = document.createElement('div');
+      tip.className = 'floatingtip';
+      tip.style.cssText = 'position:fixed;z-index:9999;max-width:280px;background:var(--card);color:var(--fg);' +
+        'border:1px solid var(--border);border-radius:9px;padding:9px 11px;font-size:11.5px;font-weight:400;' +
+        'line-height:1.5;text-align:left;box-shadow:0 6px 18px rgba(0,0,0,.16);pointer-events:none;' +
+        'opacity:0;visibility:hidden;transition:opacity .12s;white-space:normal;';
+      document.body.appendChild(tip);
+      function show(t) {
+        var msg = t.getAttribute('data-tip'); if (!msg) return;
+        tip.textContent = msg; tip.style.visibility = 'hidden'; tip.style.opacity = '0'; tip.style.left = '0px'; tip.style.top = '0px';
+        var r = t.getBoundingClientRect(), tr = tip.getBoundingClientRect(), pad = 8, gap = 8;
+        var left = r.left + r.width / 2 - tr.width / 2;
+        left = Math.max(pad, Math.min(left, window.innerWidth - tr.width - pad));
+        var top = r.bottom + gap;
+        if (top + tr.height > window.innerHeight - pad) top = r.top - gap - tr.height; // flip up if no room below
+        tip.style.left = left + 'px'; tip.style.top = Math.max(pad, top) + 'px';
+        tip.style.visibility = 'visible'; tip.style.opacity = '1';
+      }
+      function hide() { tip.style.opacity = '0'; tip.style.visibility = 'hidden'; }
+      document.addEventListener('mouseover', function (e) {
+        var t = e.target.closest && e.target.closest('.info'); if (t) show(t);
+      });
+      document.addEventListener('mouseout', function (e) {
+        if (e.target.closest && e.target.closest('.info')) hide();
+      });
+      window.addEventListener('scroll', hide, true);
+    })();
 
     renderBrowse();
     setView('browse');

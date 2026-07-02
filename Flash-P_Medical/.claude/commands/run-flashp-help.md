@@ -14,7 +14,7 @@ folder**. Do NOT run any pipeline — this command only prints help.
    `run-flashp-help.md`).
 2. For each, read **only the YAML frontmatter** (the first few lines between the `---` fences) to
    get its `description` and `argument-hint`. Do not read the rest of the file.
-3. Derive each command name from its filename (e.g. `run-flashp-visualise.md` → `/run-flashp-visualise`).
+3. Derive each command name from its filename (e.g. `run-flashp-studio.md` → `/run-flashp-studio`).
 
 ## What to print
 A short intro line, then a markdown table with one row per command:
@@ -24,8 +24,8 @@ A short intro line, then a markdown table with one row per command:
 | `/<name>` | (its `description`, trimmed to one line) | `/<name> <argument-hint>` |
 
 Order the rows: **`/run-flashp` first** (the full pipeline build), then any analysis commands present
-(`/run-flashp-epistasis`, `/run-flashp-gxe`), then `/run-flashp-visualise`, then `/run-flashp-perturb`,
-and finally `/run-flashp-help` (this command) last. Only include commands that actually exist here.
+(`/run-flashp-epistasis`, `/run-flashp-gxe`), then `/run-flashp-studio`, and finally `/run-flashp-help`
+(this command) last. Only include commands that actually exist here.
 
 Close with one line: *pipeline outputs are written to `networks/<trait>/`, and this list reflects
 exactly the commands available in this folder.*
