@@ -149,8 +149,10 @@ python Agent/shared/network_to_studio.py "<networks_dir>"
 offline HTML app embedding **every** built network, so the just-exported network is added automatically and
 the user can browse, view (DOIs), and **perturbate** all networks (KO/KD/OE + treatments; Algebraic / RWR /
 ODE) by double-click — no server. It reuses the same style map and each network's
-`validation/accuracy_metrics.json` for best-method parameters. Like Step 4b it never fails the export; note
-in your summary that the Studio was refreshed and how many networks it embedded.
+`validation/accuracy_metrics.json` for best-method parameters. By default the refreshed Studio
+**auto-opens in the browser** when this final step finishes, so the user sees the just-built network
+immediately (pass `--no-open` to suppress it in headless/scripted runs). Like Step 4b it never fails the
+export; note in your summary that the Studio was refreshed and how many networks it embedded.
 
 ### Step 5 — Cross-network merged CSVs
 ```bash
