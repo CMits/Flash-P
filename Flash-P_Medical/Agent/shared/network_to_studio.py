@@ -42,6 +42,8 @@ TEMPLATE_FILE = VISUAL_DIR / "studio_template.html"
 GRAPH_JS_FILE = VISUAL_DIR / "flashp-graph.js"
 SIM_JS_FILE = VISUAL_DIR / "flashp-sim.js"
 CHART_JS_FILE = VISUAL_DIR / "flashp-chart.js"
+PROP_CORE_JS_FILE = VISUAL_DIR / "flashp-prop-core.js"
+PROP_VIEW_JS_FILE = VISUAL_DIR / "flashp-prop-view.js"
 
 
 def _best_method(acc: dict):
@@ -72,9 +74,12 @@ def _solver_inputs(network_dir: Path):
     if alg_file.exists():
         try:
             loaded = light_io.load(str(alg_file))
+            # `f` is the published equation string; the Visual Propagation view shows it
+            # under each node's arithmetic so the shown sum can be checked against the paper.
             alg = {"equations": [{"n": q.get("node"),
                                   "a": q.get("activators", []) or [],
-                                  "inh": q.get("inhibitors", []) or []}
+                                  "inh": q.get("inhibitors", []) or [],
+                                  "f": q.get("formula") or q.get("f") or ""}
                                  for q in loaded.get("equations", []) if q.get("node")]}
         except Exception as e:
             print(f"    (equations skipped for {network_dir.name}: {e})")
@@ -150,6 +155,8 @@ def write_studio(networks: list, out_html: Path) -> bool:
         .replace("<!--FLASHP_GRAPH_JS-->", _script(GRAPH_JS_FILE))
         .replace("<!--FLASHP_SIM_JS-->", _script(SIM_JS_FILE))
         .replace("<!--FLASHP_CHART_JS-->", _script(CHART_JS_FILE))
+        .replace("<!--FLASHP_PROP_CORE_JS-->", _script(PROP_CORE_JS_FILE))
+        .replace("<!--FLASHP_PROP_VIEW_JS-->", _script(PROP_VIEW_JS_FILE))
         .replace("<!--FLASHP_DATA-->", data_json)
         .replace("<!--FLASHP_TITLE-->", title)
     )
