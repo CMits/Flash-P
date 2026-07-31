@@ -36,10 +36,16 @@ reconciled_perturbation_dataset.json
 - Judges run **one pass**; judge outputs are slim (`JUDGE`→`{verdict, suggestions[]}`).
 
 ### Evidence format
-Provenance is a **single `doi` string** (key `d`) on each edge/test — nothing else.
+Provenance in the **data files** is a single `doi` string (key `d`) on each edge/test — nothing else.
 ```json
 "d": "10.xxxx/..."
 ```
+The proof behind that DOI lives once per network in **`data/evidence.json`** (written by Step 1.6,
+never hand-edited): per claim the verbatim supporting sentence, where it sits (`abstract` or
+`full_text:<Section>`), the verification status (`verified` / `repaired` / `quarantine`) and the
+lookup trail; plus a `papers` map with title, journal, year, abstract and OA status. Open-access full
+texts go to `data/fulltext/<doi_slug>.txt`. The Studio reads all of it to show the highlighted
+sentence in the paper.
 
 ---
 
@@ -63,6 +69,7 @@ schema (all traits) = `python Agent/shared/validate_schema.py --all networks`.
 |------|-------|-----------------|-------------|--------------|
 | 1 | LITERATURE REVIEW | `Agent/LITERATURE_REVIEW_AGENT.md` | (phenotype query) | `data/curated_edges.json`, `data/perturbation_dataset.json` |
 | 1.5 | LITERATURE REVIEW JUDGE | `Agent/LITERATURE_REVIEW_JUDGE_AGENT.md` | `data/curated_edges.json`, `data/perturbation_dataset.json` | updated in-place (append-only) + `data/literature_judge_report.json` |
+| 1.6 | EVIDENCE VERIFICATION (**script, no agent**) | — run `python Agent/shared/verify_evidence.py <NET> --apply` | `data/curated_edges.json`, `data/perturbation_dataset.json` | `data/evidence.json`, `data/fulltext/*.txt`; repaired DOIs written back in place |
 | 2 | BUILDER | `Agent/BUILDER_AGENT.md` | `data/curated_edges.json`, `data/literature_judge_report.json` | `network/network.json`, `algebraic_equations.json`, `ode_equations.json`, `node_annotations.json` (QA: `check_network_structure.py --dry-run`) |
 | 2.5 | JUDGE | `Agent/JUDGE_AGENT.md` | `network/*.json`, `data/curated_edges.json` (NEVER perturbations/validation) | `network/judge_review_iteration_1.json` (slim). **ONE pass — BUILDER applies once, no loop.** |
 | 3 | PERTURBATION | `Agent/PERTURBATION_AGENT.md` | `data/perturbation_dataset.json`, `network/network.json` | `data/reconciled_perturbation_dataset.json` |
@@ -73,6 +80,7 @@ schema (all traits) = `python Agent/shared/validate_schema.py --all networks`.
 **Rules per step:**
 1. LITERATURE REVIEW: Extract EVERYTHING. No network building. No test selection. Single agent, knowledge-first → WebSearch verify (DOI from the search hit), **no subagents, no WebFetch**. Unconfirmed edges → `literature_gap`.
 1.5. LITERATURE REVIEW JUDGE: Audit Step 1 against a canonical biology checklist. Close gaps with **WebSearch only, single pass**; append in place (append-only). Do NOT read perturbation outcomes or `validation/`/`refinement/`. Runs ONCE.
+1.6. EVIDENCE VERIFICATION: **Mandatory. Run the script, never skip it.** Free (HTTP only, zero tokens). Resolves each DOI against OpenAlex/Europe PMC and requires a sentence naming both of the claim's entities; replaces DOIs that don't support their claim, quarantines what it can't ground. A DOI copied from a search snippet is a guess until this runs. Exit code 1 = some claims quarantined — report the counts, don't treat it as a crash.
 2. BUILDER: Use ONLY edges from `curated_edges.json` (merged Step 1 + 1.5). Do NOT read perturbation results. Generate BOTH algebraic AND ODE equations. Apply the JUDGE's `suggestions[]` once (no loop).
 2.5. JUDGE: Biological quality review. Do NOT read perturbations/validation. Suggests only; BUILDER applies. ONE pass. WRITE only slim `{verdict, suggestions[]}`.
 3. PERTURBATION: Map tests to network nodes. Do NOT change the network.
@@ -92,7 +100,7 @@ iteration snapshots (5) → supplementary + Cytoscape (6). No `candidate_papers.
 ---
 
 ## Non-Negotiable Rules
-1. **Evidence standard**: every edge needs a verified DOI (`d`). No fabricated references. Light keeps the DOI only.
+1. **Evidence standard**: every edge and test needs a DOI (`d`) that **Step 1.6 has verified against the paper itself** — the DOI resolves, and a sentence in that paper names both of the claim's entities. A DOI that merely resolves is not evidence: a wrong one usually resolves too. Anything that can't be grounded is marked `quarantine` in `data/evidence.json` and reported, never silently kept or silently dropped. No fabricated references. The data files keep the DOI only; the quote, abstract and full text live in `data/evidence.json`.
 2. **Equation formulas are FIXED** (geometric-mean activation, bounded-inverse inhibition; same for all node types). Full math + ODE/RWR + parameters: `PIPELINE_REFERENCE.md` → *Equation Formulas*. WT baseline = 1.0 when all inputs = 1.0.
 3. **Validation scripts only**: use the Python validators. Never compute results yourself.
 4. **WT baseline = 1.0** for all nodes.
