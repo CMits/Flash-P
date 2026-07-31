@@ -20,6 +20,7 @@ keys (they appear once per file).
 | `exo` | exogenous_supply | reconciled |
 | `cb` | comparison_baseline | reconciled, results |
 | `rt` | reconciliation_type | reconciled |
+| `d` | doi | curated_edges, network, perturbation, **reconciled** |
 | `eid` | edge_id | curated_edges, network |
 | `s` | source | curated_edges, network |
 | `t` | target | curated_edges, network |

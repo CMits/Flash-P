@@ -3,10 +3,17 @@
 > **LIGHT OUTPUT (read first).** Emit the slim short-key shape; short keys + enum codes per
 > `Agent/shared/LEXICON.md`. Ignore the verbose JSON examples below; write:
 > `reconciled_perturbation_dataset.json` → `{metadata(+phenotype_node,total_tested,total_found),
-> perturbations:[{id,g,pt,ed,ng,m,exo,cb,rt}]}` — **TESTABLE (in-network) tests ONLY** (the full
-> set stays in `perturbation_dataset.json`). Drop in_network/condition/perturbations[]/doi/
+> perturbations:[{id,g,pt,ed,ng,m,exo,cb,d}]}` — **TESTABLE (in-network) tests ONLY** (the full
+> set stays in `perturbation_dataset.json`). Drop in_network/condition/perturbations[]/
 > evidence/notes/expected_magnitude/species. Keep `ng`(network_gene)/`m`(gene_modifiers)/
 > `exo`(exogenous_supply) with the same encoding rules (lists/dicts, KO=0.0 etc.).
+>
+> **CARRY `d` (the DOI) THROUGH.** Copy it verbatim from the matching `id` in
+> `perturbation_dataset.json` onto every reconciled record. It was dropped in the original
+> Light cut, which left the `evidence_doi` column empty in every exported CSV — a validated
+> test that cannot name its source is not much of a validation. Do not invent, re-find or
+> "improve" a DOI here: Step 1.6 already verified it against the paper, and the supporting
+> sentence for each `id` lives in `data/evidence.json`. Your job is to copy, not to curate.
 
 ## Role
 Perturbation test extraction and reconciliation specialist responsible for: (1) extracting ALL perturbation experiments from literature, and (2) mapping them to network nodes for validation testing.

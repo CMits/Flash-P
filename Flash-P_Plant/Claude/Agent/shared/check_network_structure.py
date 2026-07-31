@@ -151,6 +151,23 @@ def check_evidence(network_path: Path, edges: List[Dict]) -> Dict[str, Any]:
     total = len(edges)
     grounded = counts["verified"] + counts["repaired"]
     summary = ev.get("summary", {})
+
+    # Perturbation tests are claims about the literature exactly as much as edges are —
+    # "gene X knocked out increases the phenotype" is a citation or it is nothing. They
+    # are counted from evidence.json rather than the network, which holds no tests.
+    pcounts = {"verified": 0, "repaired": 0, "quarantine": 0}
+    pungrounded: List[Dict] = []
+    for r in ev.get("perturbations", []):
+        st = r.get("verification", "quarantine")
+        pcounts[st] = pcounts.get(st, 0) + 1
+        if st == "quarantine":
+            pungrounded.append({"id": r.get("id", ""), "gene": r.get("g", ""),
+                                "pt": r.get("pt", ""), "ed": r.get("ed", ""),
+                                "doi": r.get("doi", ""),
+                                "reason": r.get("verification_reason", "")})
+    ptotal = sum(pcounts.values())
+    pgrounded = pcounts["verified"] + pcounts["repaired"]
+
     return {
         "present": True,
         "counts": counts,
@@ -160,9 +177,14 @@ def check_evidence(network_path: Path, edges: List[Dict]) -> Dict[str, Any]:
         "ungrounded": ungrounded,
         # Edges added after verification ran — the network changed and nobody re-checked.
         "unchecked": unchecked,
+        "pert_counts": pcounts,
+        "pert_grounded": pgrounded,
+        "pert_total": ptotal,
+        "pert_grounded_pct": round(100.0 * pgrounded / ptotal, 1) if ptotal else 0.0,
+        "pert_ungrounded": pungrounded,
         "papers": summary.get("papers", 0),
         "papers_with_fulltext": summary.get("papers_with_fulltext", 0),
-        "passed": not ungrounded and not unchecked,
+        "passed": not ungrounded and not unchecked and not pungrounded,
     }
 
 
@@ -525,18 +547,27 @@ def render_report(report: Dict, fix_mode: bool = False) -> str:
     if not c6.get("present"):
         lines.append(f"  NOT CHECKED - {c6.get('message', '')}")
     elif c6["passed"]:
-        lines.append(f"  PASS - all {c6['total_edges']} edges grounded in a retrieved paper "
-                     f"({c6['counts']['verified']} verified, {c6['counts']['repaired']} repaired)")
+        lines.append(f"  PASS - all {c6['total_edges']} edges and {c6['pert_total']} perturbation "
+                     f"tests grounded in a retrieved paper")
         lines.append(f"  {c6['papers']} papers cited, {c6['papers_with_fulltext']} with "
                      f"open-access full text")
     else:
-        lines.append(f"  GROUNDED: {c6['grounded']}/{c6['total_edges']} ({c6['grounded_pct']}%)  "
+        lines.append(f"  EDGES: {c6['grounded']}/{c6['total_edges']} grounded ({c6['grounded_pct']}%)  "
                      f"[verified {c6['counts']['verified']}, repaired {c6['counts']['repaired']}, "
                      f"unverified {c6['counts']['quarantine']}]")
-        for e in c6["ungrounded"][:8]:
-            lines.append(f"    - {e['source']} -> {e['target']}: {e['reason'][:74]}")
-        if len(c6["ungrounded"]) > 8:
-            lines.append(f"    ... and {len(c6['ungrounded']) - 8} more")
+        for e in c6["ungrounded"][:6]:
+            lines.append(f"    - {e['source']} -> {e['target']}: {e['reason'][:72]}")
+        if len(c6["ungrounded"]) > 6:
+            lines.append(f"    ... and {len(c6['ungrounded']) - 6} more")
+        lines.append(f"  TESTS: {c6['pert_grounded']}/{c6['pert_total']} grounded "
+                     f"({c6['pert_grounded_pct']}%)  "
+                     f"[verified {c6['pert_counts']['verified']}, "
+                     f"repaired {c6['pert_counts']['repaired']}, "
+                     f"unverified {c6['pert_counts']['quarantine']}]")
+        for p in c6["pert_ungrounded"][:6]:
+            lines.append(f"    - {p['id']} {p['gene']} {p['pt']} -> {p['ed']}: {p['reason'][:56]}")
+        if len(c6["pert_ungrounded"]) > 6:
+            lines.append(f"    ... and {len(c6['pert_ungrounded']) - 6} more")
         if c6["unchecked"]:
             lines.append(f"  NOT IN evidence.json: {len(c6['unchecked'])} edges — the network "
                          f"changed after verification ran; re-run verify_evidence.py")
