@@ -15,7 +15,7 @@ from typing import Dict, List, Optional
 
 from pydantic import Field
 
-from .common import Direction, FlashPMetadata, NodeType, SlimModel
+from .common import Direction, DoiStr, FlashPMetadata, NodeType, SlimModel
 
 
 # ============================================================================
@@ -27,7 +27,7 @@ class CuratedEdge(SlimModel):
     source: str = Field(alias="s")
     target: str = Field(alias="t")
     sign: int = Field(alias="x", description="1 = activation, -1 = inhibition")
-    doi: str = Field(default="", alias="d", description="Primary supporting DOI")
+    doi: DoiStr = Field(default="", alias="d", description="Primary supporting DOI")
 
 
 class CuratedEdgesMetadata(FlashPMetadata):
@@ -52,7 +52,7 @@ class RawPerturbation(SlimModel):
     perturbation_type: str = Field(alias="pt")
     expected_direction: Direction = Field(alias="ed")
     species: str = Field(default="", alias="sp")
-    doi: str = Field(default="", alias="d")
+    doi: DoiStr = Field(default="", alias="d")
 
 
 class PerturbationDatasetMetadata(FlashPMetadata):

@@ -16,7 +16,7 @@ from typing import List, Optional
 
 from pydantic import Field
 
-from .common import FlashPMetadata, NodeType, SlimModel
+from .common import DoiStr, FlashPMetadata, NodeType, SlimModel
 
 
 # ============================================================================
@@ -35,7 +35,7 @@ class NetworkEdge(SlimModel):
     target: str = Field(alias="t")
     sign: int = Field(alias="x", description="1 = activation, -1 = inhibition")
     edge_id: str = Field(default="", alias="eid")
-    doi: str = Field(default="", alias="d")
+    doi: DoiStr = Field(default="", alias="d")
 
 
 class NetworkMetadata(FlashPMetadata):

@@ -39,7 +39,8 @@ _PERT = {"id": "test_id", "g": "gene", "pt": "perturbation_type",
          "ed": "expected_direction", "sp": "species", "d": "doi"}
 _RECON = {"id": "test_id", "g": "gene", "pt": "perturbation_type",
           "ed": "expected_direction", "ng": "network_gene", "m": "gene_modifiers",
-          "exo": "exogenous_supply", "cb": "comparison_baseline", "rt": "reconciliation_type"}
+          "exo": "exogenous_supply", "cb": "comparison_baseline", "rt": "reconciliation_type",
+          "d": "doi"}
 _EQ = {"n": "node", "ty": "type", "src": "is_source", "a": "activators",
        "inh": "inhibitors", "f": "formula"}
 _ANN = {"n": "node", "fn": "full_name", "ty": "type", "desc": "description", "src": "is_source"}
