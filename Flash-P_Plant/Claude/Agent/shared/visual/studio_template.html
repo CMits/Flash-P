@@ -232,6 +232,94 @@
     .ntable .dot { width: 8px; height: 8px; border-radius: 999px; border: 1px solid var(--muted); flex: none; }
     .ntable .dot.on { background: var(--primary); border-color: var(--primary); }
     .footnote { font-size: 11px; color: var(--muted); line-height: 1.5; border-top: 1px solid var(--border); padding-top: 10px; margin-top: 4px; }
+
+    /* ---- evidence drawer ----
+       Slide-over showing the paper behind a claim, with the supporting sentence
+       highlighted. Ported from the website's atlas drawer (Flash-P-AI
+       src/app/atlas/_shared.tsx) — same shape and behaviour, but plain CSS and
+       vanilla JS instead of framer-motion + React, because the Studio is one
+       offline file and must stay that way. */
+    .drawer-ovl {
+      position: fixed; inset: 0; z-index: 40; background: rgba(0,0,0,.42);
+      backdrop-filter: blur(3px); opacity: 0; pointer-events: none; transition: opacity .22s ease;
+    }
+    .drawer-ovl.show { opacity: 1; pointer-events: auto; }
+    .drawer {
+      position: fixed; right: 0; top: 0; z-index: 41; height: 100%; width: 100%; max-width: 30rem;
+      display: flex; flex-direction: column; border-left: 1px solid var(--border);
+      background: var(--card); box-shadow: -8px 0 28px rgba(0,0,0,.20);
+      transform: translateX(100%); transition: transform .28s cubic-bezier(.32,.72,0,1);
+    }
+    @media (min-width: 1200px) { .drawer { max-width: 34rem; } }
+    @media (prefers-reduced-motion: reduce) { .drawer, .drawer-ovl { transition: none; } }
+    .drawer.show { transform: translateX(0); }
+    .drawer-head {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      padding: 10px 16px; border-bottom: 1px solid var(--border); flex: none;
+    }
+    .drawer-head .lbl { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+    .drawer-head .x { border: none; background: none; cursor: pointer; color: var(--muted); font-size: 20px; line-height: 1; padding: 2px 6px; border-radius: 6px; }
+    .drawer-head .x:hover { background: var(--secondary); }
+    .drawer-body { padding: 16px; overflow: auto; flex: 1; font-size: 13px; line-height: 1.55; }
+    .drawer-body h2 { margin: 0 0 4px; font-size: 16px; line-height: 1.35; }
+    .drawer-body .claim { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 14px; font-weight: 700; }
+    .drawer-body .meta { color: var(--muted); font-size: 12px; margin: 2px 0 12px; }
+    .drawer-body .meta a { border-bottom: 1px dotted currentColor; text-decoration: none; }
+
+    .evbadge {
+      display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; font-weight: 700;
+      padding: 2px 9px; border-radius: 999px; border: 1px solid; white-space: nowrap;
+    }
+    .evbadge.verified   { color: #15803d; border-color: rgba(21,128,61,.45);  background: rgba(21,128,61,.10); }
+    .evbadge.repaired   { color: #b45309; border-color: rgba(180,83,9,.45);   background: rgba(180,83,9,.10); }
+    .evbadge.quarantine { color: #b91c1c; border-color: rgba(185,28,28,.45);  background: rgba(185,28,28,.10); }
+    html.dark .evbadge.verified { color: #4ade80; } html.dark .evbadge.repaired { color: #fbbf24; }
+    html.dark .evbadge.quarantine { color: #f87171; }
+
+    .evnote { font-size: 12px; color: var(--muted); border-left: 2px solid var(--border); padding-left: 10px; margin: 10px 0; }
+    .evquote {
+      border: 1px solid color-mix(in srgb, var(--primary) 35%, transparent);
+      background: color-mix(in srgb, var(--primary) 7%, transparent);
+      border-radius: 10px; padding: 12px 14px; margin: 12px 0; font-style: italic;
+    }
+    .evquote .cap { font-style: normal; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); display: block; margin-bottom: 6px; }
+
+    .evtabs {
+      display: inline-flex; gap: 2px; border: 1px solid var(--border); border-radius: 8px;
+      padding: 2px; font-size: 12px; margin: 6px 0 8px; background: color-mix(in srgb, var(--secondary) 55%, transparent);
+    }
+    .evtabs button { border: none; background: none; padding: 4px 12px; border-radius: 6px; cursor: pointer; font-weight: 600; color: var(--muted); }
+    .evtabs button.active { background: var(--card); color: var(--fg); box-shadow: 0 1px 2px rgba(0,0,0,.10); }
+    .evtabs button:disabled { opacity: .42; cursor: not-allowed; }
+    .evtext {
+      max-height: 46vh; overflow: auto; border: 1px solid var(--border); border-radius: 10px;
+      padding: 12px 14px; background: color-mix(in srgb, var(--secondary) 28%, transparent);
+      position: relative;   /* so a highlight's offsetTop is measured against this box */
+    }
+    .evtext p { margin: 0 0 9px; } .evtext p:last-child { margin-bottom: 0; }
+    .evtext h4 { margin: 14px 0 5px; font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+    .evtext h4:first-child { margin-top: 0; }
+    mark.ev { background: color-mix(in srgb, var(--primary) 30%, transparent); color: inherit; border-radius: 3px; padding: 0 2px; }
+
+    /* ---- evidence view (table of every claim) ---- */
+    #view-evidence { display: none; overflow: auto; padding: 18px 22px 40px; }
+    #view-evidence.show { display: block; }
+    #view-evidence h1 { margin: 0 0 4px; font-size: 20px; }
+    .ev-sub { color: var(--muted); font-size: 12.5px; margin-bottom: 14px; }
+    .ev-tallies { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+    .ev-filter { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 12px; font-size: 12px; }
+    .ev-filter .pill { border: 1px solid var(--border); border-radius: 999px; padding: 3px 11px; cursor: pointer; font-weight: 600; background: var(--card); }
+    .ev-filter .pill.active { background: var(--primary); color: var(--primary-fg); border-color: var(--primary); }
+    .evwrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 11px; background: var(--card); }
+    .evtable { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 640px; }
+    .evtable th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); border-bottom: 1px solid var(--border); padding: 8px 10px; white-space: nowrap; }
+    .evtable td { padding: 8px 10px; border-bottom: 1px solid color-mix(in srgb, var(--border) 55%, transparent); vertical-align: top; }
+    .evtable tbody tr { cursor: pointer; }
+    .evtable tbody tr:hover { background: var(--secondary); }
+    .evtable tbody tr:last-child td { border-bottom: none; }
+    .evtable .cl { font-family: ui-monospace, Menlo, Consolas, monospace; white-space: nowrap; }
+    .evtable .qt { color: var(--muted); }
+    .ev-empty { border: 1px dashed var(--border); border-radius: 11px; padding: 30px; text-align: center; color: var(--muted); }
   </style>
   <!--FLASHP_LIBS-->
 </head>
@@ -243,6 +331,7 @@
     <div class="navbtns">
       <button class="btn" id="nav-browse">Browse</button>
       <button class="btn" id="nav-view" style="display:none">View</button>
+      <button class="btn" id="nav-evidence" style="display:none">Evidence</button>
       <button class="btn" id="nav-sim" style="display:none">Simulate</button>
       <button class="btn" id="nav-theme" title="Toggle dark mode">&#9680;</button>
     </div>
@@ -284,6 +373,15 @@
       </div>
     </section>
 
+    <!-- EVIDENCE -->
+    <section id="view-evidence" class="view">
+      <h1>Evidence</h1>
+      <div class="ev-sub" id="ev-sub"></div>
+      <div class="ev-tallies" id="ev-tallies"></div>
+      <div class="ev-filter" id="ev-filter"></div>
+      <div id="ev-content"></div>
+    </section>
+
     <!-- SIMULATE -->
     <section id="view-sim" class="view">
       <div class="sim-bar">
@@ -310,6 +408,16 @@
     </section>
   </main>
 
+  <!-- Evidence drawer: lives outside <main> so it overlays every view. -->
+  <div class="drawer-ovl" id="drawer-ovl"></div>
+  <aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" hidden>
+    <div class="drawer-head">
+      <span class="lbl" id="drawer-title">Evidence</span>
+      <button class="x" id="drawer-close" aria-label="Close">&times;</button>
+    </div>
+    <div class="drawer-body" id="drawer-body"></div>
+  </aside>
+
   <script id="flashp-data" type="application/json"><!--FLASHP_DATA--></script>
   <!--FLASHP_GRAPH_JS-->
   <!--FLASHP_SIM_JS-->
@@ -333,6 +441,221 @@
       return '<a href="https://doi.org/' + encodeURI(doi) + '" target="_blank" rel="noopener">' + esc(doi) + '</a>';
     }
     function el(html) { var d = document.createElement('div'); d.innerHTML = html; return d.firstElementChild; }
+
+    // ================= EVIDENCE =================
+    // Papers and full texts are shared across networks, keyed by DOI (see
+    // network_to_studio.py::_evidence_inputs).
+    var PAPERS = DATA.papers || {};
+    var FULLTEXT = DATA.fulltext || {};
+
+    var STATUS_LABEL = { verified: 'verified', repaired: 'DOI repaired', quarantine: 'unverified' };
+
+    function evBadge(st) {
+      var s = st || 'quarantine';
+      var glyph = s === 'verified' ? '✓' : s === 'repaired' ? '↻' : '⚠';
+      return '<span class="evbadge ' + s + '">' + glyph + ' ' + (STATUS_LABEL[s] || s) + '</span>';
+    }
+
+    /* Highlight exactly the supporting sentence — one match, nothing else.
+       Whitespace-tolerant and case-insensitive so a line-wrapped source still matches;
+       no term-spraying fallback, because lighting up a gene name everywhere it occurs
+       is not evidence. This can only fail to find its mark if the stored quote is not
+       a literal substring, and verify_evidence.py guarantees it is: the quote is
+       sliced out of this very text rather than re-typed by a model. */
+    function highlightHtml(text, phrase) {
+      if (!text) return '';
+      var p = (phrase || '').trim();
+      if (p.length >= 8) {
+        var pat = p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
+        try {
+          var m = new RegExp(pat, 'i').exec(text);
+          if (m) {
+            var a = m.index, b = a + m[0].length;
+            return esc(text.slice(0, a)) + '<mark class="ev">' + esc(text.slice(a, b)) +
+              '</mark>' + esc(text.slice(b));
+          }
+        } catch (e) { /* unusable regex — fall through to plain text */ }
+      }
+      return esc(text);
+    }
+
+    // Full text is stored with "## Section" headings (the convention shared with
+    // Flash-P_DataBase and the website), so it renders as headings + paragraphs.
+    function renderSource(text, phrase) {
+      if (!text) return '';
+      var out = [], lines = String(text).split('\n');
+      for (var i = 0; i < lines.length; i++) {
+        var ln = lines[i].trim();
+        if (!ln) continue;
+        if (ln.indexOf('## ') === 0) out.push('<h4>' + esc(ln.slice(3)) + '</h4>');
+        else out.push('<p>' + highlightHtml(ln, phrase) + '</p>');
+      }
+      return out.join('');
+    }
+
+    // ---- drawer ----
+    var drawer = document.getElementById('drawer');
+    var drawerOvl = document.getElementById('drawer-ovl');
+    var drawerBody = document.getElementById('drawer-body');
+    var drawerTitle = document.getElementById('drawer-title');
+    var lastFocus = null;
+
+    function closeDrawer() {
+      drawer.classList.remove('show');
+      drawerOvl.classList.remove('show');
+      // Wait out the slide-out before hiding, so the animation is visible.
+      setTimeout(function () { if (!drawer.classList.contains('show')) drawer.hidden = true; }, 300);
+      if (lastFocus && lastFocus.focus) { try { lastFocus.focus(); } catch (e) {} }
+    }
+    document.getElementById('drawer-close').onclick = closeDrawer;
+    drawerOvl.onclick = closeDrawer;
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && drawer.classList.contains('show')) closeDrawer();
+    });
+
+    function paperMetaHtml(doi) {
+      var p = PAPERS[doi];
+      if (!p) {
+        return '<div class="meta">' + doiLink(doi) +
+          ' <span class="qt">— paper details not embedded</span></div>';
+      }
+      var bits = [];
+      if (p.journal) bits.push(esc(p.journal));
+      if (p.year) bits.push(String(p.year));
+      if (p.oa_status) bits.push(esc(p.oa_status) + ' OA');
+      return '<h2>' + esc(p.title || '(untitled)') + '</h2>' +
+        '<div class="meta">' + (bits.length ? bits.join(' · ') + '<br>' : '') + doiLink(doi) + '</div>';
+    }
+
+    function sourceTabsHtml(rec) {
+      var doi = rec.doi || '';
+      var ft = FULLTEXT[doi] || '';
+      var p = PAPERS[doi] || {};
+      var hasAbs = !!p.abstract, hasFt = !!ft;
+      if (!hasAbs && !hasFt) {
+        return '<div class="evnote">No abstract or full text could be retrieved for this DOI, ' +
+          'so there is nothing here to check the quote against.</div>';
+      }
+      var wantFt = (rec.source_locator || '').indexOf('full_text') === 0 && hasFt;
+      var html = '<div class="evtabs" role="tablist">' +
+        '<button data-tab="abstract"' + (wantFt ? '' : ' class="active"') +
+        (hasAbs ? '' : ' disabled') + '>Abstract</button>' +
+        '<button data-tab="fulltext"' + (wantFt ? ' class="active"' : '') +
+        (hasFt ? '' : ' disabled') + '>Full text</button></div>';
+      if (!hasFt) {
+        // Say why rather than showing a dead tab: closed access is a fact about the
+        // paper, not a failure of the pipeline, and the reader should know which.
+        html += '<div class="evnote">Full text is not open access, so only the abstract ' +
+          'can be shown here. Follow the DOI for the publisher\'s version.</div>';
+      }
+      html += '<div class="evtext" id="ev-source"></div>';
+      return html;
+    }
+
+    function fillSource(rec, which) {
+      var host = document.getElementById('ev-source');
+      if (!host) return;
+      var p = PAPERS[rec.doi] || {};
+      var q = rec.evidence || '';
+      host.innerHTML = which === 'fulltext'
+        ? renderSource(FULLTEXT[rec.doi] || '', q)
+        : '<p>' + highlightHtml(p.abstract || '', q) + '</p>';
+      // Centre the highlight inside its own box by setting scrollTop directly.
+      // scrollIntoView would scroll every ancestor too, pushing the claim and the
+      // verification badge out of the drawer — the reader would land mid-paper with
+      // no idea which claim they were looking at.
+      var mark = host.querySelector('mark.ev');
+      if (mark) {
+        setTimeout(function () {
+          host.scrollTop = Math.max(0, mark.offsetTop - host.clientHeight / 2 + mark.offsetHeight / 2);
+        }, 60);
+      }
+    }
+
+    function openDrawer(rec, kind) {
+      if (!rec) return;
+      lastFocus = document.activeElement;
+      drawerTitle.textContent = kind === 'pert' ? 'Perturbation evidence' : 'Edge evidence';
+
+      var claim = kind === 'pert'
+        ? esc(rec.g) + ' <span style="color:var(--muted)">' + esc(rec.pt || '') + '</span> → ' + esc(rec.ed || '')
+        : esc(rec.s) + ' <span style="color:' + (rec.x < 0 ? 'var(--neg)' : 'var(--pos)') + '">' +
+          (rec.x < 0 ? '⊣' : '→') + '</span> ' + esc(rec.t);
+
+      var html = '<div class="claim">' + claim + '</div>' +
+        '<div style="margin:8px 0 12px">' + evBadge(rec.verification) +
+        (rec.confidence ? ' <span class="chip">confidence ' + rec.confidence + '</span>' : '') +
+        (kind === 'pert' && rec.sp ? ' <span class="chip">' + esc(rec.sp) + '</span>' : '') + '</div>';
+
+      if (rec.verification === 'repaired' && rec.previous_doi) {
+        html += '<div class="evnote">The DOI originally on this claim was <b>' + esc(rec.previous_doi) +
+          '</b>. That paper does not state this relationship, so it was replaced with the one below, ' +
+          'which does.</div>';
+      }
+      if (rec.verification === 'quarantine') {
+        html += '<div class="evnote"><b>Not verified.</b> ' +
+          esc(rec.verification_reason || 'No supporting sentence could be located.') +
+          ' This claim is shown so you can judge it yourself — it is not evidence.</div>';
+      } else if (rec.verification_reason) {
+        html += '<div class="evnote">' + esc(rec.verification_reason) + '</div>';
+      }
+
+      if (rec.doi) html += paperMetaHtml(rec.doi);
+
+      if (rec.evidence) {
+        html += '<div class="evquote"><span class="cap">Supporting sentence · ' +
+          esc(rec.source_locator || 'source') + '</span>“' + esc(rec.evidence) + '”</div>';
+      }
+      if (rec.doi) html += sourceTabsHtml(rec);
+
+      drawerBody.innerHTML = html;
+      drawerBody.scrollTop = 0;
+
+      var tabs = drawerBody.querySelectorAll('.evtabs button');
+      Array.prototype.forEach.call(tabs, function (b) {
+        b.onclick = function () {
+          if (b.disabled) return;
+          Array.prototype.forEach.call(tabs, function (o) { o.classList.remove('active'); });
+          b.classList.add('active');
+          fillSource(rec, b.getAttribute('data-tab'));
+        };
+      });
+      var active = drawerBody.querySelector('.evtabs button.active');
+      if (active) fillSource(rec, active.getAttribute('data-tab'));
+
+      drawer.hidden = false;
+      // Force a reflow so the transform transition actually runs on first open.
+      void drawer.offsetWidth;
+      drawer.classList.add('show');
+      drawerOvl.classList.add('show');
+      document.getElementById('drawer-close').focus();
+    }
+
+    // ---- lookups ----
+    // Case-folded on purpose: the BUILDER upper-cases node ids on the way into
+    // network.json (ZmEPF2 -> ZMEPF2), while evidence.json keeps the spelling from
+    // curated_edges.json. Matching case-sensitively silently reports every verified
+    // gene edge as unverified when clicked in the graph.
+    function edgeKey(s, t, x) {
+      return String(s).toUpperCase() + ' ' + String(t).toUpperCase() + ' ' + (Number(x) < 0 ? -1 : 1);
+    }
+
+    // Built lazily per network and cached on the entry. The join is on (s, t, sign),
+    // never on edge id: the BUILDER renumbers E### to N### between curated_edges.json
+    // and network.json, so ids do not survive the trip.
+    function evIndex(net) {
+      if (net._evIdx) return net._evIdx;
+      var idx = { edges: {}, perts: {}, list: (net.ev && net.ev.edges) || [],
+                  plist: (net.ev && net.ev.perts) || [] };
+      idx.list.forEach(function (r) { idx.edges[edgeKey(r.s, r.t, r.x)] = r; });
+      idx.plist.forEach(function (r) { idx.perts[r.id] = r; });
+      net._evIdx = idx;
+      return idx;
+    }
+    function hasEvidence(net) {
+      var e = net.ev;
+      return !!(e && ((e.edges && e.edges.length) || (e.perts && e.perts.length)));
+    }
     // Small hover "i" with a plain-text explanation. pos: '' | 'up' | 'left' | 'up left'.
     function info(tip, pos) {
       return '<span class="info' + (pos ? ' ' + pos : '') + '" data-tip="' + esc(tip) + '">i</span>';
@@ -360,16 +683,21 @@
     }
     function setView(name) {
       document.body.setAttribute('data-view', name);
-      ['browse', 'view', 'sim'].forEach(function (v) {
+      ['browse', 'view', 'evidence', 'sim'].forEach(function (v) {
         document.getElementById('view-' + v).classList.toggle('show', v === name);
       });
       document.getElementById('nav-view').style.display = curSlug ? '' : 'none';
       document.getElementById('nav-sim').style.display = curSlug ? '' : 'none';
+      // The Evidence tab only appears once a network has been verified — an empty
+      // tab would read as "no evidence exists" rather than "not checked yet".
+      document.getElementById('nav-evidence').style.display =
+        (curSlug && hasEvidence(bySlug[curSlug])) ? '' : 'none';
       document.getElementById('crumb').textContent = curSlug ? '· ' + bySlug[curSlug].name : '';
     }
 
     document.getElementById('nav-browse').onclick = function () { destroyApps(); setView('browse'); };
     document.getElementById('nav-view').onclick = function () { if (curSlug) openView(curSlug); };
+    document.getElementById('nav-evidence').onclick = function () { if (curSlug) openEvidence(curSlug); };
     document.getElementById('nav-sim').onclick = function () { if (curSlug) openSim(curSlug); };
     document.getElementById('nav-theme').onclick = function () {
       var dark = document.documentElement.classList.toggle('dark');
@@ -519,9 +847,17 @@
           return list.map(function (e) {
             var arrow = e.neg ? '⊣' : '→';
             var col = e.neg ? 'var(--neg)' : 'var(--pos)';
-            var left = dir === 'in' ? esc(e.other) : esc(d.id);
-            var right = dir === 'in' ? esc(d.id) : esc(e.other);
-            return '<li><span class="arrow" style="color:' + col + '">' + left + ' ' + arrow + ' ' + right + '</span><br>' + doiLink(e.doi) + '</li>';
+            var s = dir === 'in' ? e.other : d.id;
+            var t = dir === 'in' ? d.id : e.other;
+            var x = e.neg ? -1 : 1;
+            // Each listed edge is itself a claim, so it opens the same drawer the
+            // graph does — a DOI you cannot inspect is just a string.
+            var rec = hasEvidence(net) ? evIndex(net).edges[edgeKey(s, t, x)] : null;
+            var tail = rec
+              ? '<a href="#" data-ev="' + esc(edgeKey(s, t, x)) + '">' + evBadge(rec.verification) + '</a>'
+              : doiLink(e.doi);
+            return '<li><span class="arrow" style="color:' + col + '">' + esc(s) + ' ' + arrow +
+              ' ' + esc(t) + '</span><br>' + tail + '</li>';
           }).join('');
         };
         panel.innerHTML =
@@ -534,12 +870,39 @@
           '<h3>Regulates (' + d.outgoers.length + ')</h3><ul>' + rows(d.outgoers, 'out') + '</ul>';
         panel.className = 'nodepanel show';
         panel.querySelector('.close').onclick = function () { viewApp.clearSelection(); };
+        Array.prototype.forEach.call(panel.querySelectorAll('a[data-ev]'), function (a) {
+          a.onclick = function (ev) {
+            ev.preventDefault();
+            openDrawer(evIndex(net).edges[a.getAttribute('data-ev')], 'edge');
+          };
+        });
+      }
+
+      // Clicking an edge opens the evidence drawer for that claim. If the network has
+      // not been verified there is nothing to show, so fall back to the plain DOI link
+      // rather than opening an empty panel.
+      function onEdge(d) {
+        if (!d) return;
+        renderPanel(null);   // an edge selection replaces any open node inspector
+        var rec = hasEvidence(net) ? evIndex(net).edges[edgeKey(d.s, d.t, d.x)] : null;
+        if (rec) { openDrawer(rec, 'edge'); return; }
+        openDrawer({
+          s: d.s, t: d.t, x: d.x, doi: d.doi || '',
+          verification: 'quarantine',
+          verification_reason: d.doi
+            ? 'This network has not been verified yet, so this DOI has not been checked '
+              + 'against the claim. Run verify_evidence.py to check it.'
+            : 'No DOI is recorded for this edge.',
+        }, 'edge');
       }
 
       viewApp = window.FLASHP.init({
         container: document.getElementById('view-cy'),
         data: { meta: { slug: slug }, elements: net.elements, style: STYLE, annById: net.annById },
-        opts: { layout: 'elk', dark: document.documentElement.classList.contains('dark'), onSelect: renderPanel },
+        opts: {
+          layout: 'elk', dark: document.documentElement.classList.contains('dark'),
+          onSelect: renderPanel, onSelectEdge: onEdge,
+        },
       });
 
       var sel = document.getElementById('view-layout');
@@ -572,6 +935,91 @@
         var svg = viewApp.cy.svg({ full: true, bg: exportBg() });
         download(slug + '.svg', 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg));
       };
+    }
+
+    // ================= EVIDENCE VIEW =================
+    var evFilter = 'all';
+
+    function openEvidence(slug) {
+      destroyApps();
+      curSlug = slug;
+      setView('evidence');
+      renderEvidence();
+    }
+
+    function renderEvidence() {
+      var net = bySlug[curSlug];
+      var idx = evIndex(net);
+      var sum = (net.ev && net.ev.summary) || {};
+      var e = sum.edges || {}, p = sum.perturbations || {};
+      var tot = function (o) { return (o.verified || 0) + (o.repaired || 0) + (o.quarantine || 0); };
+      var grounded = (e.verified || 0) + (e.repaired || 0) + (p.verified || 0) + (p.repaired || 0);
+      var all = tot(e) + tot(p);
+
+      document.getElementById('ev-sub').innerHTML =
+        'Every claim in <b>' + esc(net.name) + '</b>, with the paper and the exact sentence behind it. ' +
+        'Click any row to read the source.';
+
+      document.getElementById('ev-tallies').innerHTML =
+        evBadge('verified') + ' <span class="chip">' + ((e.verified || 0) + (p.verified || 0)) + '</span>' +
+        evBadge('repaired') + ' <span class="chip">' + ((e.repaired || 0) + (p.repaired || 0)) + '</span>' +
+        evBadge('quarantine') + ' <span class="chip">' + ((e.quarantine || 0) + (p.quarantine || 0)) + '</span>' +
+        '<span class="chip">' + grounded + ' / ' + all + ' grounded' +
+        (all ? ' (' + Math.round(100 * grounded / all) + '%)' : '') + '</span>' +
+        '<span class="chip">' + (sum.papers || 0) + ' papers, ' +
+        (sum.papers_with_fulltext || 0) + ' open access</span>';
+
+      var fb = document.getElementById('ev-filter');
+      fb.innerHTML = ['all', 'verified', 'repaired', 'quarantine'].map(function (k) {
+        return '<span class="pill' + (evFilter === k ? ' active' : '') + '" data-f="' + k + '">' +
+          (k === 'all' ? 'All' : STATUS_LABEL[k]) + '</span>';
+      }).join('');
+      Array.prototype.forEach.call(fb.querySelectorAll('.pill'), function (b) {
+        b.onclick = function () { evFilter = b.getAttribute('data-f'); renderEvidence(); };
+      });
+
+      var keep = function (r) { return evFilter === 'all' || r.verification === evFilter; };
+      var edges = idx.list.filter(keep), perts = idx.plist.filter(keep);
+
+      var table = function (rows, kind) {
+        if (!rows.length) return '';
+        var head = kind === 'pert'
+          ? '<th>Perturbation</th><th>Status</th><th>Paper</th><th>Supporting sentence</th>'
+          : '<th>Edge</th><th>Status</th><th>Paper</th><th>Supporting sentence</th>';
+        var body = rows.map(function (r, i) {
+          var claim = kind === 'pert'
+            ? esc(r.g) + ' ' + esc(r.pt || '') + ' → ' + esc(r.ed || '')
+            : esc(r.s) + ' ' + (r.x < 0 ? '⊣' : '→') + ' ' + esc(r.t);
+          var pap = PAPERS[r.doi] || {};
+          var title = pap.title ? esc(pap.title.slice(0, 58)) + (pap.title.length > 58 ? '…' : '')
+            : (r.doi ? esc(r.doi) : '<span class="qt">—</span>');
+          var quote = r.evidence
+            ? esc(r.evidence.slice(0, 90)) + (r.evidence.length > 90 ? '…' : '')
+            : '<span class="qt">not grounded</span>';
+          return '<tr data-kind="' + kind + '" data-i="' + i + '">' +
+            '<td class="cl">' + claim + '</td>' +
+            '<td>' + evBadge(r.verification) + '</td>' +
+            '<td>' + title + '</td>' +
+            '<td class="qt">' + quote + '</td></tr>';
+        }).join('');
+        return '<h3 style="font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:18px 0 6px">' +
+          (kind === 'pert' ? 'Perturbation tests' : 'Edges') + ' (' + rows.length + ')</h3>' +
+          '<div class="evwrap"><table class="evtable"><thead><tr>' + head +
+          '</tr></thead><tbody>' + body + '</tbody></table></div>';
+      };
+
+      var content = document.getElementById('ev-content');
+      content.innerHTML = (edges.length || perts.length)
+        ? table(edges, 'edge') + table(perts, 'pert')
+        : '<div class="ev-empty">No claims with this status.</div>';
+
+      Array.prototype.forEach.call(content.querySelectorAll('tbody tr'), function (tr) {
+        tr.onclick = function () {
+          var kind = tr.getAttribute('data-kind');
+          var i = parseInt(tr.getAttribute('data-i'), 10);
+          openDrawer((kind === 'pert' ? perts : edges)[i], kind);
+        };
+      });
     }
 
     function renderLegend(lg, app) {

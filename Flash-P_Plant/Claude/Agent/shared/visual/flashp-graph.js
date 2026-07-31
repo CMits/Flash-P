@@ -14,7 +14,8 @@
  * Usage (both the artifact HTML and the headless renderer call this):
  *   const app = FLASHP.init({ container, data, opts });
  *   // data = { meta, elements:[...], style:{node,edge}, annById:{id:{...}} }
- *   // opts = { layout:'elk', dark:false, labels:true, onReady:fn, onSelect:fn }
+ *   // opts = { layout:'elk', dark:false, labels:true, onReady:fn, onSelect:fn,
+ *   //          onSelectEdge:fn }   onSelectEdge receives {s,t,x,eid,doi} or null
  *   // app exposes: cy, applyLayout(key), toggleLabels(on), fit(), setTheme(dark),
  *   //              clearSelection(), LAYOUT_LABELS, present (node types present)
  *
@@ -78,6 +79,7 @@
     var annById = data.annById || {};
     var onReady = opts.onReady || function () {};
     var onSelect = opts.onSelect || function () {};
+    var onSelectEdge = opts.onSelectEdge || function () {};
 
     var elkInstance = null;
     var currentLayout = opts.layout || 'elk';
@@ -153,6 +155,13 @@
     global.cy = cy; // expose for headless capture / debugging
 
     cy.on('tap', 'node', function (evt) { selectNode(evt.target); });
+    // An edge is a claim about the literature, so it has to be clickable: this is
+    // what opens the evidence drawer. Without this handler an edge tap fell through
+    // to the background handler below and cleared the selection instead.
+    cy.on('tap', 'edge', function (evt) {
+      evt.stopPropagation();
+      selectEdge(evt.target);
+    });
     cy.on('tap', function (evt) { if (evt.target === cy) clearSelection(); });
 
     // ---- selection / inspector ----
@@ -180,9 +189,24 @@
         outgoers: node.outgoers('edge').map(function (e) { return toEdge(e, 'out'); }),
       });
     }
+    function selectEdge(edge) {
+      var src = edge.source(), tgt = edge.target();
+      cy.elements().addClass('faded');
+      edge.removeClass('faded').addClass('hl');
+      src.removeClass('faded').addClass('hl');
+      tgt.removeClass('faded').addClass('hl');
+      onSelectEdge({
+        s: src.id(),
+        t: tgt.id(),
+        x: edge.data('sign'),
+        eid: edge.data('id'),
+        doi: edge.data('doi') || '',
+      });
+    }
     function clearSelection() {
       cy.elements().removeClass('faded hl');
       onSelect(null);
+      onSelectEdge(null);
     }
 
     // ---- edge routing helpers (ported from network.js / NetworkGraph.tsx) ----
