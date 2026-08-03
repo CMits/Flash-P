@@ -14,10 +14,12 @@ so the file works by double-click — no server, no install, no upload. Re-run t
 to refresh after building new networks (the Export step does this automatically).
 
 Usage:
-    python Agent/shared/network_to_studio.py <networks_dir>
+    python Agent/shared/network_to_studio.py <networks_dir> [--no-open]
 
   <networks_dir> is the folder that CONTAINS your trait networks (e.g. `networks`
   or `Networks_Flash-P`). Every `*/network/network.json` beneath it is embedded.
+  By default the finished Studio auto-opens in your default browser; pass
+  --no-open to just write the file (e.g. for headless / scripted runs).
 
 Output: <networks_dir>/Flash-P_Studio.html
 """
@@ -26,6 +28,7 @@ import argparse
 import datetime
 import json
 import sys
+import webbrowser
 from pathlib import Path
 
 import light_io
@@ -39,6 +42,8 @@ TEMPLATE_FILE = VISUAL_DIR / "studio_template.html"
 GRAPH_JS_FILE = VISUAL_DIR / "flashp-graph.js"
 SIM_JS_FILE = VISUAL_DIR / "flashp-sim.js"
 CHART_JS_FILE = VISUAL_DIR / "flashp-chart.js"
+PROP_CORE_JS_FILE = VISUAL_DIR / "flashp-prop-core.js"
+PROP_VIEW_JS_FILE = VISUAL_DIR / "flashp-prop-view.js"
 
 
 def _best_method(acc: dict):
@@ -69,9 +74,12 @@ def _solver_inputs(network_dir: Path):
     if alg_file.exists():
         try:
             loaded = light_io.load(str(alg_file))
+            # `f` is the published equation string; the Visual Propagation view shows it
+            # under each node's arithmetic so the shown sum can be checked against the paper.
             alg = {"equations": [{"n": q.get("node"),
                                   "a": q.get("activators", []) or [],
-                                  "inh": q.get("inhibitors", []) or []}
+                                  "inh": q.get("inhibitors", []) or [],
+                                  "f": q.get("formula") or q.get("f") or ""}
                                  for q in loaded.get("equations", []) if q.get("node")]}
         except Exception as e:
             print(f"    (equations skipped for {network_dir.name}: {e})")
@@ -147,6 +155,8 @@ def write_studio(networks: list, out_html: Path) -> bool:
         .replace("<!--FLASHP_GRAPH_JS-->", _script(GRAPH_JS_FILE))
         .replace("<!--FLASHP_SIM_JS-->", _script(SIM_JS_FILE))
         .replace("<!--FLASHP_CHART_JS-->", _script(CHART_JS_FILE))
+        .replace("<!--FLASHP_PROP_CORE_JS-->", _script(PROP_CORE_JS_FILE))
+        .replace("<!--FLASHP_PROP_VIEW_JS-->", _script(PROP_VIEW_JS_FILE))
         .replace("<!--FLASHP_DATA-->", data_json)
         .replace("<!--FLASHP_TITLE-->", title)
     )
@@ -158,6 +168,8 @@ def main():
     parser = argparse.ArgumentParser(
         description="Build the FLASH-P Studio (browse + view + simulate) for all networks in a directory.")
     parser.add_argument("networks_dir", help="Directory containing trait networks (e.g. 'networks')")
+    parser.add_argument("--no-open", action="store_true",
+                        help="Do not auto-open the Studio in a browser after building.")
     args = parser.parse_args()
 
     root = Path(args.networks_dir)
@@ -190,7 +202,15 @@ def main():
     out_html = root / "Flash-P_Studio.html"
     offline = write_studio(entries, out_html)
     print(f"\n  Studio saved: {out_html}  ({'offline, self-contained' if offline else 'CDN libraries'})")
-    print(f"  {len(entries)} network(s) embedded. Open it by double-click — no server needed.")
+    print(f"  {len(entries)} network(s) embedded.")
+    if not args.no_open:
+        try:
+            webbrowser.open(out_html.resolve().as_uri())
+            print("  Opening in your default browser… (re-open any time by double-clicking the file).")
+        except Exception as e:
+            print(f"  (Could not auto-open — open it yourself by double-click: {out_html})  [{e}]")
+    else:
+        print("  --no-open set; open it by double-click when you want it — no server needed.")
     print("\nDone!")
 
 
