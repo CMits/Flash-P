@@ -24,8 +24,14 @@ Everything here is free: HTTP plus string matching, no model calls.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Tuple
+
+# Sections in which a paper restates other people's findings — see _primary_rank.
+_SECONDHAND = re.compile(
+    r"^(introduction|background|overview|literature review|general discussion|"
+    r"concluding remarks|perspectives?|future)", re.I)
 
 try:
     from . import litapi, match, sentence
@@ -47,10 +53,43 @@ REPAIRED = "repaired"
 QUARANTINE = "quarantine"
 
 
+def _primary_rank(support: "Support", year: int, confidence: float):
+    """Sort key for choosing between papers that all support the claim (lower = better).
+
+    Prefer, in order:
+
+    1. **Evidence over restatement.** A sentence in an abstract or a Results section is
+       the paper's own finding. One in an Introduction is that paper citing somebody
+       else — grounding a claim there is grounding it in a citation.
+    2. **The primary report.** Search engines rank by recency and relevance, so without
+       this every claim lands on the newest review that mentions it: an early run put
+       all 22 repairs on 2024+ papers and let a single 2026 paper absorb nine claims.
+       The oldest paper that actually states the finding is usually the one that found it.
+    3. Confidence, as a tie-break.
+
+    This mirrors ``Flash-P_DataBase``'s own ``pick_doi``, which prefers full text, then
+    judge trust, then "the earliest paper (the primary report)".
+    """
+    loc = support.locator
+    if loc == "abstract":
+        tier = 0
+    elif loc.startswith("full_text:") and not _SECONDHAND.match(loc.split(":", 1)[1].strip()):
+        tier = 1
+    else:
+        tier = 2                       # Introduction/Background, or an unlabelled section
+    return (tier, year, -confidence)
+
+
 @dataclass
 class Config:
     max_rounds: int = 3
     candidates_per_round: int = 8
+    # Collect at least this many supporting papers before choosing, so the choice is
+    # between real alternatives rather than "whichever the search returned first".
+    # Two is the cost/quality knee: going to three roughly quadrupled wall-clock on a
+    # 40-claim network for a small gain, because it forces every repair through all
+    # three search rounds.
+    min_candidates_before_pick: int = 2
     # Full text is a second call per paper; only worth it for the DOI on record and
     # the first couple of replacements, not for every search hit we glance at.
     fulltext: bool = True
@@ -170,8 +209,12 @@ def _search_rounds(claim: Claim, cfg: Config) -> List[Tuple[str, Callable[[], Li
                                  sentence._readable(claim.entity_b)) if x)
     return [
         ("europepmc", lambda: litapi.epmc_search(q, n)),
-        ("openalex", lambda: litapi.openalex_search(q, n)),
-        ("europepmc", lambda: litapi.epmc_search(broad, n)),
+        # Sorted by citations, not relevance. Both engines rank recent work first, so a
+        # relevance search never surfaces the paper that established a relationship —
+        # it surfaces this year's paper restating it. The seminal report is, almost by
+        # definition, the most-cited one.
+        ("openalex", lambda: litapi.openalex_search(q, n, sort="cited_by_count:desc")),
+        ("openalex", lambda: litapi.openalex_search(broad, n)),
     ][:max(1, cfg.max_rounds)]
 
 
@@ -220,6 +263,7 @@ def resolve_claim(claim: Claim, doi: str, store: Store,
     # -- 2. repair -----------------------------------------------------------
     seen = {original} if original else set()
     ft_budget = cfg.fulltext_candidates
+    found: List[Tuple[float, int, str, PaperRecord, Support, str]] = []
 
     for source, run in _search_rounds(claim, cfg):
         try:
@@ -253,15 +297,29 @@ def resolve_claim(claim: Claim, doi: str, store: Store,
                 continue
 
             store.put(cand)
-            res.status = REPAIRED
-            res.doi = d
-            res.previous_doi = original
-            res.support = support
-            res.paper = cand
-            res.reason = (f"original DOI did not support this claim; replaced from {source}"
-                          if original else f"no DOI on record; found via {source}")
+            found.append((support.confidence, cand.get("year") or 9999, d, cand, support, source))
+
+        # Enough to choose well; searching further rounds only adds more of the same.
+        if len(found) >= cfg.min_candidates_before_pick:
+            break
+
+    if found:
+        best = min(found, key=lambda c: _primary_rank(c[4], c[1], c[0]))
+        _, year, d, cand, support, source = best
+        res.status = REPAIRED
+        res.doi = d
+        res.previous_doi = original
+        res.support = support
+        res.paper = cand
+        res.reason = (f"original DOI did not support this claim; replaced from {source}"
+                      if original else f"no DOI on record; found via {source}")
+        if len(found) > 1:
+            res.tried.append(Attempt(source, "search", "hit",
+                                     f"{len(found)} papers supported this claim; chose {d} "
+                                     f"({year}) as the most primary"))
+        else:
             res.tried.append(Attempt(source, "search", "hit", f"grounded in {d}"))
-            return res
+        return res
 
     # -- 3. exhausted --------------------------------------------------------
     res.status = QUARANTINE

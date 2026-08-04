@@ -27,7 +27,9 @@ import argparse
 import json
 import os
 import sys
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -149,33 +151,69 @@ def collect_claims(net: str) -> Tuple[List[dict], List[dict], Dict[str, Any]]:
 # ---------------------------------------------------------------------------
 # verification
 # ---------------------------------------------------------------------------
+def _resolve_one(rec: dict, store: Store, cfg: Config) -> dict:
+    """Resolve a single record. Runs in a worker thread — no shared mutable state
+    besides ``store`` (thread-safe, see provenance/store.py) and ``litapi.STATS``
+    (thread-safe counters)."""
+    claim: Claim = rec["claim"]
+    res = resolve_claim(claim, rec["doi"], store, cfg)
+    row = {k: v for k, v in rec.items() if k != "claim"}
+    row.update({
+        "doi": res.doi,
+        "evidence": res.support.quote if res.support else "",
+        "source_locator": res.support.locator if res.support else "",
+        "confidence": res.support.confidence if res.support else 0.0,
+        "verification": res.status,
+        "verification_reason": res.reason,
+        "previous_doi": res.previous_doi,
+        "tried": [a.as_dict() for a in res.tried],
+    })
+    return row
+
+
 def verify_records(records: List[dict], store: Store, cfg: Config,
-                   kind: str, quiet: bool = False) -> List[dict]:
-    """Resolve every record, reporting progress as it goes."""
-    out = []
+                   kind: str, quiet: bool = False, workers: int = 1) -> List[dict]:
+    """Resolve every record, reporting progress as it completes.
+
+    With ``workers > 1`` records are resolved concurrently in a thread pool: each
+    record is mostly waiting on network I/O (DOI lookup, repair search, full-text
+    fetch), so overlapping records overlaps that wait instead of paying it serially.
+    The per-host request pacing in ``litapi._wait_turn`` still applies across all
+    threads, so this does not increase the request rate any single host sees — it
+    just stops one slow/retrying record from blocking every other record behind it.
+    Output order always matches input order regardless of completion order.
+    """
     total = len(records)
-    for i, rec in enumerate(records, 1):
-        claim: Claim = rec["claim"]
-        res = resolve_claim(claim, rec["doi"], store, cfg)
+    out: List[Optional[dict]] = [None] * total
+    workers = max(1, min(workers, total) or 1)
 
-        row = {k: v for k, v in rec.items() if k != "claim"}
-        row.update({
-            "doi": res.doi,
-            "evidence": res.support.quote if res.support else "",
-            "source_locator": res.support.locator if res.support else "",
-            "confidence": res.support.confidence if res.support else 0.0,
-            "verification": res.status,
-            "verification_reason": res.reason,
-            "previous_doi": res.previous_doi,
-            "tried": [a.as_dict() for a in res.tried],
-        })
-        out.append(row)
+    if workers == 1:
+        for i, rec in enumerate(records):
+            out[i] = _resolve_one(rec, store, cfg)
+            if not quiet:
+                _print_progress(kind, i + 1, total, records[i]["claim"], out[i])
+        return out  # type: ignore[return-value]
 
-        if not quiet:
-            mark = {VERIFIED: "ok ", REPAIRED: "fix", QUARANTINE: "QRN"}[res.status]
-            extra = f" -> {res.doi}" if res.status == REPAIRED else ""
-            print(f"  [{i:>3}/{total}] {mark} {kind} {claim.label[:48]:<48}{extra}")
-    return out
+    done = 0
+    print_lock = threading.Lock()
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {pool.submit(_resolve_one, rec, store, cfg): i
+                   for i, rec in enumerate(records)}
+        for fut in as_completed(futures):
+            i = futures[fut]
+            row = fut.result()
+            out[i] = row
+            if not quiet:
+                with print_lock:
+                    done += 1
+                    _print_progress(kind, done, total, records[i]["claim"], row)
+    return out  # type: ignore[return-value]
+
+
+def _print_progress(kind: str, i: int, total: int, claim: Claim, row: dict) -> None:
+    mark = {VERIFIED: "ok ", REPAIRED: "fix", QUARANTINE: "QRN"}[row["verification"]]
+    extra = f" -> {row['doi']}" if row["verification"] == REPAIRED else ""
+    print(f"  [{i:>3}/{total}] {mark} {kind} {claim.label[:48]:<48}{extra}")
 
 
 def write_fulltexts(net: str, dois: List[str], store: Store) -> Dict[str, str]:
@@ -301,16 +339,18 @@ def print_report(name: str, edges: List[dict], tests: List[dict],
 # main
 # ---------------------------------------------------------------------------
 def verify_network(net: str, cfg: Config, apply: bool = False,
-                   quiet: bool = False, cache: Optional[str] = None) -> dict:
+                   quiet: bool = False, cache: Optional[str] = None,
+                   workers: int = 1) -> dict:
     started = time.time()
     name = os.path.basename(os.path.abspath(net.rstrip("/\\")))
     edges, tests, meta = collect_claims(net)
     if not quiet:
-        print(f"\n{name}: {len(edges)} edges, {len(tests)} perturbation tests")
+        tag = f" ({workers} workers)" if workers > 1 else ""
+        print(f"\n{name}: {len(edges)} edges, {len(tests)} perturbation tests{tag}")
 
     with Store(cache or default_path()) as store:
-        e_rows = verify_records(edges, store, cfg, "edge", quiet)
-        t_rows = verify_records(tests, store, cfg, "test", quiet)
+        e_rows = verify_records(edges, store, cfg, "edge", quiet, workers)
+        t_rows = verify_records(tests, store, cfg, "test", quiet, workers)
 
         dois = [r["doi"] for r in e_rows + t_rows if r["doi"]]
         fulltexts = write_fulltexts(net, dois, store)
@@ -367,6 +407,11 @@ def main(argv: Optional[List[str]] = None) -> int:
                     help="candidate papers examined per round (default 8)")
     ap.add_argument("--cache", default=None, help="path to the paper cache DB")
     ap.add_argument("--quiet", action="store_true", help="summary only")
+    ap.add_argument("--workers", type=int, default=8,
+                    help="concurrent records to resolve at once (default 8; "
+                         "1 = old sequential behaviour). Verification is network-"
+                         "latency-bound, not CPU-bound, so this is the main lever "
+                         "on wall-clock time; per-host request pacing is unchanged.")
     args = ap.parse_args(argv)
 
     cfg = Config(max_rounds=args.max_rounds, candidates_per_round=args.candidates,
@@ -378,7 +423,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(f"not a directory: {net}", file=sys.stderr)
             worst = 2
             continue
-        ev = verify_network(net, cfg, apply=args.apply, quiet=args.quiet, cache=args.cache)
+        ev = verify_network(net, cfg, apply=args.apply, quiet=args.quiet,
+                            cache=args.cache, workers=args.workers)
         q = ev["summary"]["edges"].get(QUARANTINE, 0) + \
             ev["summary"]["perturbations"].get(QUARANTINE, 0)
         worst = max(worst, 1 if q else 0)

@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
+import threading
 import time
 from typing import Optional
 
@@ -68,14 +69,22 @@ CREATE TABLE IF NOT EXISTS miss (
 
 
 class Store:
-    """SQLite-backed paper cache. Safe to use from a single process."""
+    """SQLite-backed paper cache.
+
+    Safe to share across threads: SQLite itself only allows one writer/reader
+    to touch a connection at a time, so every access here goes through
+    ``self._lock``. A verification run's actual cost is network latency, not
+    these local reads/writes, so serializing them costs nothing measurable
+    while letting concurrent workers overlap on the part that's actually slow.
+    """
 
     def __init__(self, path: str) -> None:
         parent = os.path.dirname(os.path.abspath(path))
         if parent:
             os.makedirs(parent, exist_ok=True)
         self.path = path
-        self.con = sqlite3.connect(path)
+        self._lock = threading.Lock()
+        self.con = sqlite3.connect(path, check_same_thread=False)
         self.con.row_factory = sqlite3.Row
         self.con.executescript(_SCHEMA)
         self.con.commit()
@@ -88,64 +97,77 @@ class Store:
         d = bare_doi(doi)
         if not d:
             return None
-        row = self.con.execute("SELECT * FROM paper WHERE doi = ?", (d,)).fetchone()
-        if row is None:
-            return None
-        self.hits += 1
-        rec = PaperRecord.empty(d)
-        for k in ("title", "authors", "year", "journal", "licence",
-                  "oa_status", "abstract", "pmcid", "source"):
-            rec[k] = row[k]
-        rec["fulltext"] = self.get_fulltext(d)
-        return rec
+        with self._lock:
+            row = self.con.execute("SELECT * FROM paper WHERE doi = ?", (d,)).fetchone()
+            if row is None:
+                return None
+            self.hits += 1
+            rec = PaperRecord.empty(d)
+            for k in ("title", "authors", "year", "journal", "licence",
+                      "oa_status", "abstract", "pmcid", "source"):
+                rec[k] = row[k]
+            rec["fulltext"] = self._get_fulltext_locked(d)
+            return rec
 
     def put(self, rec: PaperRecord) -> None:
         d = bare_doi(rec.get("doi", ""))
         if not d:
             return
-        self.con.execute(
-            """INSERT INTO paper (doi, title, authors, year, journal, licence,
-                                  oa_status, abstract, pmcid, source, fetched_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?)
-               ON CONFLICT(doi) DO UPDATE SET
-                 title=excluded.title, authors=excluded.authors, year=excluded.year,
-                 journal=excluded.journal, licence=excluded.licence,
-                 oa_status=excluded.oa_status, abstract=excluded.abstract,
-                 pmcid=excluded.pmcid, source=excluded.source,
-                 fetched_at=excluded.fetched_at""",
-            (d, rec.get("title", "") or "", rec.get("authors", "") or "",
-             rec.get("year"), rec.get("journal", "") or "", rec.get("licence", "") or "",
-             rec.get("oa_status", "") or "", rec.get("abstract", "") or "",
-             rec.get("pmcid", "") or "", rec.get("source", "") or "", time.time()))
-        if rec.get("fulltext"):
-            self.put_fulltext(d, rec["fulltext"])
-        # A DOI that now resolves is no longer a miss.
-        self.con.execute("DELETE FROM miss WHERE doi = ?", (d,))
-        self.con.commit()
+        with self._lock:
+            self.con.execute(
+                """INSERT INTO paper (doi, title, authors, year, journal, licence,
+                                      oa_status, abstract, pmcid, source, fetched_at)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                   ON CONFLICT(doi) DO UPDATE SET
+                     title=excluded.title, authors=excluded.authors, year=excluded.year,
+                     journal=excluded.journal, licence=excluded.licence,
+                     oa_status=excluded.oa_status, abstract=excluded.abstract,
+                     pmcid=excluded.pmcid, source=excluded.source,
+                     fetched_at=excluded.fetched_at""",
+                (d, rec.get("title", "") or "", rec.get("authors", "") or "",
+                 rec.get("year"), rec.get("journal", "") or "", rec.get("licence", "") or "",
+                 rec.get("oa_status", "") or "", rec.get("abstract", "") or "",
+                 rec.get("pmcid", "") or "", rec.get("source", "") or "", time.time()))
+            if rec.get("fulltext"):
+                self._put_fulltext_locked(d, rec["fulltext"])
+            # A DOI that now resolves is no longer a miss.
+            self.con.execute("DELETE FROM miss WHERE doi = ?", (d,))
+            self.con.commit()
 
     # -- full text ---------------------------------------------------------
+    def _get_fulltext_locked(self, doi: str) -> str:
+        """Caller already holds ``self._lock``."""
+        row = self.con.execute("SELECT text FROM fulltext WHERE doi = ?", (doi,)).fetchone()
+        return row["text"] if row else ""
+
     def get_fulltext(self, doi: str) -> str:
         d = bare_doi(doi)
         if not d:
             return ""
-        row = self.con.execute("SELECT text FROM fulltext WHERE doi = ?", (d,)).fetchone()
-        return row["text"] if row else ""
+        with self._lock:
+            return self._get_fulltext_locked(d)
+
+    def _put_fulltext_locked(self, doi: str, text: str) -> None:
+        """Caller already holds ``self._lock``; does not commit."""
+        self.con.execute(
+            """INSERT INTO fulltext (doi, text, chars, fetched_at) VALUES (?,?,?,?)
+               ON CONFLICT(doi) DO UPDATE SET
+                 text=excluded.text, chars=excluded.chars, fetched_at=excluded.fetched_at""",
+            (doi, text, len(text), time.time()))
 
     def put_fulltext(self, doi: str, text: str) -> None:
         d = bare_doi(doi)
         if not d or not text:
             return
-        self.con.execute(
-            """INSERT INTO fulltext (doi, text, chars, fetched_at) VALUES (?,?,?,?)
-               ON CONFLICT(doi) DO UPDATE SET
-                 text=excluded.text, chars=excluded.chars, fetched_at=excluded.fetched_at""",
-            (d, text, len(text), time.time()))
-        self.con.commit()
+        with self._lock:
+            self._put_fulltext_locked(d, text)
+            self.con.commit()
 
     def has_fulltext(self, doi: str) -> bool:
         d = bare_doi(doi)
-        row = self.con.execute("SELECT 1 FROM fulltext WHERE doi = ?", (d,)).fetchone()
-        return row is not None
+        with self._lock:
+            row = self.con.execute("SELECT 1 FROM fulltext WHERE doi = ?", (d,)).fetchone()
+            return row is not None
 
     # -- negative cache ----------------------------------------------------
     def is_miss(self, doi: str) -> bool:
@@ -153,35 +175,38 @@ class Store:
         d = bare_doi(doi)
         if not d:
             return False
-        row = self.con.execute("SELECT checked_at FROM miss WHERE doi = ?", (d,)).fetchone()
-        if row is None:
-            return False
-        age_days = (time.time() - (row["checked_at"] or 0)) / 86400.0
-        if age_days > MISS_TTL_DAYS:
-            self.con.execute("DELETE FROM miss WHERE doi = ?", (d,))
-            self.con.commit()
-            return False
-        self.misses += 1
-        return True
+        with self._lock:
+            row = self.con.execute("SELECT checked_at FROM miss WHERE doi = ?", (d,)).fetchone()
+            if row is None:
+                return False
+            age_days = (time.time() - (row["checked_at"] or 0)) / 86400.0
+            if age_days > MISS_TTL_DAYS:
+                self.con.execute("DELETE FROM miss WHERE doi = ?", (d,))
+                self.con.commit()
+                return False
+            self.misses += 1
+            return True
 
     def mark_miss(self, doi: str, reason: str = "") -> None:
         d = (doi or "").strip().lower()
         if not d:
             return
-        self.con.execute(
-            """INSERT INTO miss (doi, reason, checked_at) VALUES (?,?,?)
-               ON CONFLICT(doi) DO UPDATE SET
-                 reason=excluded.reason, checked_at=excluded.checked_at""",
-            (d, reason, time.time()))
-        self.con.commit()
+        with self._lock:
+            self.con.execute(
+                """INSERT INTO miss (doi, reason, checked_at) VALUES (?,?,?)
+                   ON CONFLICT(doi) DO UPDATE SET
+                     reason=excluded.reason, checked_at=excluded.checked_at""",
+                (d, reason, time.time()))
+            self.con.commit()
 
     # -- housekeeping ------------------------------------------------------
     def counts(self) -> dict:
-        q = lambda sql: self.con.execute(sql).fetchone()[0]
-        return {"papers": q("SELECT COUNT(*) FROM paper"),
-                "with_abstract": q("SELECT COUNT(*) FROM paper WHERE abstract <> ''"),
-                "fulltexts": q("SELECT COUNT(*) FROM fulltext"),
-                "misses": q("SELECT COUNT(*) FROM miss")}
+        with self._lock:
+            q = lambda sql: self.con.execute(sql).fetchone()[0]
+            return {"papers": q("SELECT COUNT(*) FROM paper"),
+                    "with_abstract": q("SELECT COUNT(*) FROM paper WHERE abstract <> ''"),
+                    "fulltexts": q("SELECT COUNT(*) FROM fulltext"),
+                    "misses": q("SELECT COUNT(*) FROM miss")}
 
     def close(self) -> None:
         self.con.close()

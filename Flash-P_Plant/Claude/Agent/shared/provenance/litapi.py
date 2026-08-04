@@ -63,13 +63,25 @@ _last_call: Dict[str, float] = {}
 
 
 class HttpStats:
-    """Counters for one verification run — surfaced in the report so the cost is visible."""
+    """Counters for one verification run — surfaced in the report so the cost is visible.
+
+    Incremented from every worker thread in a concurrent run, so each update goes
+    through a lock — cheap next to the network call it's counting.
+    """
 
     def __init__(self) -> None:
+        self._lock = threading.Lock()
         self.calls = 0
         self.retries = 0
         self.errors = 0
         self.bytes = 0
+
+    def add(self, *, calls: int = 0, retries: int = 0, errors: int = 0, bytes_: int = 0) -> None:
+        with self._lock:
+            self.calls += calls
+            self.retries += retries
+            self.errors += errors
+            self.bytes += bytes_
 
     def __str__(self) -> str:
         return (f"{self.calls} HTTP calls, {self.retries} retries, "
@@ -108,16 +120,16 @@ def _fetch(url: str, accept: str = "application/json") -> Optional[bytes]:
         req = urllib.request.Request(
             url, headers={"User-Agent": USER_AGENT, "Accept": accept})
         try:
-            STATS.calls += 1
+            STATS.add(calls=1)
             with urllib.request.urlopen(req, timeout=TIMEOUT_S) as resp:
                 body = resp.read()
-                STATS.bytes += len(body)
+                STATS.add(bytes_=len(body))
                 return body
         except urllib.error.HTTPError as e:
             if e.code in (404, 400):
                 return None
             if e.code == 429 or 500 <= e.code < 600:
-                STATS.retries += 1
+                STATS.add(retries=1)
                 if attempt < MAX_RETRIES - 1:
                     # Honour Retry-After when the server sends one.
                     ra = e.headers.get("Retry-After") if e.headers else None
@@ -128,15 +140,15 @@ def _fetch(url: str, accept: str = "application/json") -> Optional[bytes]:
                     time.sleep(min(wait, 30.0))
                     delay *= 2
                     continue
-            STATS.errors += 1
+            STATS.add(errors=1)
             return None
         except (urllib.error.URLError, TimeoutError, OSError):
-            STATS.retries += 1
+            STATS.add(retries=1)
             if attempt < MAX_RETRIES - 1:
                 time.sleep(delay)
                 delay *= 2
                 continue
-            STATS.errors += 1
+            STATS.add(errors=1)
             return None
     return None
 
@@ -148,7 +160,7 @@ def _fetch_json(url: str) -> Optional[Any]:
     try:
         return json.loads(raw.decode("utf-8", "replace"))
     except (json.JSONDecodeError, UnicodeDecodeError):
-        STATS.errors += 1
+        STATS.add(errors=1)
         return None
 
 
@@ -295,7 +307,8 @@ def openalex_by_doi(doi: str) -> Optional[PaperRecord]:
     return rec
 
 
-def openalex_search(query: str, per_page: int = 8) -> List[PaperRecord]:
+def openalex_search(query: str, per_page: int = 8,
+                    sort: str = "relevance_score:desc") -> List[PaperRecord]:
     """Free-text search, used when a DOI has to be re-found.
 
     Retracted works and paratext (editorials, covers, indexes) are excluded at the
@@ -309,7 +322,7 @@ def openalex_search(query: str, per_page: int = 8) -> List[PaperRecord]:
         "search": q,
         "per_page": max(1, min(25, per_page)),
         "filter": "is_retracted:false,is_paratext:false",
-        "sort": "relevance_score:desc",
+        "sort": sort,
     })
     data = _fetch_json(f"{OPENALEX}/works?{params}")
     out: List[PaperRecord] = []
