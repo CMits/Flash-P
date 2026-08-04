@@ -151,6 +151,55 @@ def collect_claims(net: str) -> Tuple[List[dict], List[dict], Dict[str, Any]]:
 # ---------------------------------------------------------------------------
 # verification
 # ---------------------------------------------------------------------------
+def prefetch_papers(records: List[dict], store: Store, cfg: Config,
+                    quiet: bool = False) -> int:
+    """Warm the cache with every DOI in the network, in a handful of batched calls.
+
+    Both catalogues take a batch of DOIs per request, so a whole network's on-record
+    DOIs cost a few calls instead of one or two per claim. Three things fall out of
+    doing it once, up front:
+
+      * claims that share a paper (73 distinct DOIs behind 122 claims in the salinity
+        network) stop re-fetching it;
+      * no two workers can race to fetch the same DOI, which the per-claim path could
+        not prevent — the cache only helps once the first fetch has *returned*;
+      * the per-claim ladder then usually starts from a cache hit.
+
+    Only metadata and abstracts are prefetched. Full text stays lazy — it is the
+    expensive call and most claims never need it.
+    """
+    if cfg.offline:
+        return 0
+    want = []
+    for rec in records:
+        d = bare_doi(rec.get("doi", ""))
+        if d and d not in want:
+            want.append(d)
+    # Anything already cached with an abstract needs nothing; known-bad DOIs are skipped
+    # so a batch is not spent re-asking about them.
+    todo = [d for d in want
+            if not (store.get(d) or {}).get("abstract") and not store.is_miss(d)]
+    if not todo:
+        return 0
+
+    # Europe PMC only: it is free and takes 25 DOIs per call. OpenAlex's equivalent
+    # (``filter=doi:A|B|C``) goes through its metered ``/works?`` endpoint, so bulk
+    # lookups there buy a daily-budget 429 instead of speed. Whatever Europe PMC cannot
+    # answer is picked up per claim by the ladder in ``resolve.py``, on OpenAlex's free
+    # single-entity route and in parallel across the worker pool.
+    ep = litapi.epmc_by_dois(todo)
+
+    stored = 0
+    for d, rec in ep.items():
+        rec["doi"] = d
+        store.put(rec)
+        stored += 1
+    if not quiet:
+        print(f"  prefetched {stored}/{len(todo)} papers "
+              f"({len(want) - len(todo)} already cached)")
+    return stored
+
+
 def _resolve_one(rec: dict, store: Store, cfg: Config) -> dict:
     """Resolve a single record. Runs in a worker thread — no shared mutable state
     besides ``store`` (thread-safe, see provenance/store.py) and ``litapi.STATS``
@@ -323,6 +372,15 @@ def print_report(name: str, edges: List[dict], tests: List[dict],
         print(f"\ngrounded: {good}/{total} ({100.0 * good / total:.0f}%)   "
               f"papers: {len(papers)} ({abs_ok} with abstract, {oa} with open-access full text)")
     print(f"time: {elapsed:.0f}s   {litapi.STATS}")
+    # Which endpoint the wall-clock actually went to — the totals alone can't tell a
+    # whole-paper full-text download apart from a metadata lookup.
+    print(litapi.STATS.breakdown())
+
+    # A spent daily allowance quietly removes a search backend, which shows up as more
+    # quarantines rather than as an error. Say so plainly instead.
+    for label, why in litapi.metered_out().items():
+        print(f"\n  ! {label} was skipped for the rest of this run — quota exhausted.\n"
+              f"    {why[:160]}")
 
     bad = [r for r in edges + tests if r["verification"] == QUARANTINE]
     if bad:
@@ -349,6 +407,7 @@ def verify_network(net: str, cfg: Config, apply: bool = False,
         print(f"\n{name}: {len(edges)} edges, {len(tests)} perturbation tests{tag}")
 
     with Store(cache or default_path()) as store:
+        prefetch_papers(edges + tests, store, cfg, quiet)
         e_rows = verify_records(edges, store, cfg, "edge", quiet, workers)
         t_rows = verify_records(tests, store, cfg, "test", quiet, workers)
 

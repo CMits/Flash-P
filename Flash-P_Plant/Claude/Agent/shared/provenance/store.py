@@ -84,12 +84,29 @@ class Store:
             os.makedirs(parent, exist_ok=True)
         self.path = path
         self._lock = threading.Lock()
+        self._gates: dict = {}
         self.con = sqlite3.connect(path, check_same_thread=False)
         self.con.row_factory = sqlite3.Row
         self.con.executescript(_SCHEMA)
         self.con.commit()
         self.hits = 0
         self.misses = 0
+
+    # -- in-flight de-duplication -------------------------------------------
+    def gate(self, key: str) -> threading.Lock:
+        """A lock named after the thing about to be fetched.
+
+        The cache only helps once a fetch has *returned*, so without this two workers
+        that need the same paper both go to the network — and with claims sharing papers
+        heavily, that is common. Hold this around a fetch and re-check the cache inside,
+        and the second worker waits briefly and then finds the answer already there.
+        """
+        with self._lock:
+            g = self._gates.get(key)
+            if g is None:
+                g = threading.Lock()
+                self._gates[key] = g
+            return g
 
     # -- papers ------------------------------------------------------------
     def get(self, doi: str) -> Optional[PaperRecord]:

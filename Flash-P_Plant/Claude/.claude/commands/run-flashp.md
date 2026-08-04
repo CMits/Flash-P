@@ -31,9 +31,10 @@ chat history in context.
    python Agent/shared/verify_evidence.py <NET> --apply
    ```
    Deterministic Python: no agent, no subagent, **zero model tokens**. It resolves every DOI against
-   OpenAlex and Europe PMC, requires a sentence in the paper naming both of the claim's entities,
-   replaces DOIs that do not support their claim, and writes `data/evidence.json` +
+   Europe PMC, PubMed and OpenAlex, requires a sentence in the paper naming both of the claim's
+   entities, replaces DOIs that do not support their claim, and writes `data/evidence.json` +
    `data/fulltext/`. `--apply` writes the corrected DOIs back so the BUILDER inherits them.
+   Expect ~90 s for a 130-claim network; it resolves 8 claims at a time (`--workers`).
 
    A DOI the model copied out of a search snippet is a guess until this step confirms it — and about
    a quarter of them do not survive. Run it **after 1.5** (so judge-added edges are checked too) and

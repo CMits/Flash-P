@@ -25,6 +25,7 @@ Everything here is free: HTTP plus string matching, no model calls.
 from __future__ import annotations
 
 import re
+import threading
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Tuple
 
@@ -82,7 +83,9 @@ def _primary_rank(support: "Support", year: int, confidence: float):
 
 @dataclass
 class Config:
-    max_rounds: int = 3
+    # Four plans are available (see _search_rounds); most claims stop after one or two
+    # because min_candidates_before_pick is reached.
+    max_rounds: int = 4
     candidates_per_round: int = 8
     # Collect at least this many supporting papers before choosing, so the choice is
     # between real alternatives rather than "whichever the search returned first".
@@ -126,21 +129,17 @@ class Resolution:
 
 
 # ---------------------------------------------------------------------------
-# paper retrieval
+# paper retrieval — a ladder, climbed only as far as the claim needs
 # ---------------------------------------------------------------------------
-def fetch_paper(doi: str, store: Store, cfg: Config,
-                tried: Optional[List[Attempt]] = None) -> Optional[PaperRecord]:
-    """Metadata + abstract (+ OA full text) for a DOI, cache first.
-
-    Both catalogues are consulted and merged: OpenAlex has better journal and OA
-    fields, Europe PMC has abstracts for a lot of biology OpenAlex leaves blank and is
-    the only one that yields a usable PMCID. Either alone loses records the other has.
-    """
-    tried = tried if tried is not None else []
-    d = bare_doi(doi)
-    if not d:
-        return None
-
+# Most claims are grounded on the first rung: in the salinity network 49 of 122 were
+# settled by the abstract alone. Fetching the second catalogue and then a whole-paper
+# full text *before* asking whether the abstract already worked is what made this step
+# slow — a measured run spent 256 s of its 667 s of network time on full-text XML, much
+# of it for claims that never needed it. So each rung is climbed only after the one
+# below it failed to ground the claim.
+def _open_record(d: str, store: Store, cfg: Config,
+                 tried: List[Attempt]) -> Optional[PaperRecord]:
+    """Rung 1 — the cache, else OpenAlex. Abstract only; no full text is fetched."""
     cached = store.get(d)
     if cached is not None and cached.get("abstract"):
         tried.append(Attempt("cache", "by_doi", "hit", d))
@@ -152,20 +151,116 @@ def fetch_paper(doi: str, store: Store, cfg: Config,
         tried.append(Attempt("cache", "by_doi", "miss", "known unresolvable (cached)"))
         return None
 
-    oa = litapi.openalex_by_doi(d)
-    tried.append(Attempt("openalex", "by_doi", "hit" if oa else "miss", d))
+    with store.gate("oa:" + d):
+        cached = store.get(d)             # another worker may have fetched it meanwhile
+        if cached is not None and cached.get("abstract"):
+            tried.append(Attempt("cache", "by_doi", "hit", d))
+            return cached
+        oa = litapi.openalex_by_doi(d)
+        tried.append(Attempt("openalex", "by_doi", "hit" if oa else "miss", d))
+        if oa is not None:
+            oa["doi"] = d
+            store.put(oa)
+        return oa
+
+
+def _add_europepmc(rec: Optional[PaperRecord], d: str, store: Store, cfg: Config,
+                   tried: List[Attempt]) -> Optional[PaperRecord]:
+    """Rung 2 — Europe PMC's second opinion, merged into what we have.
+
+    Worth its call for two things OpenAlex often lacks: an abstract for a lot of the
+    biology literature, and the PMCID that rung 3 needs. Returns ``rec`` unchanged when
+    Europe PMC knows nothing, or None when neither catalogue has the DOI at all.
+    """
+    if cfg.offline:
+        return rec
     ep = litapi.epmc_by_doi(d)
     tried.append(Attempt("europepmc", "by_doi", "hit" if ep else "miss", d))
-
-    rec = litapi.merge_records(oa, ep)
-    if rec is None:
+    merged = litapi.merge_records(rec, ep)
+    if merged is None:
         store.mark_miss(d, "not found in OpenAlex or Europe PMC")
         return None
+    merged["doi"] = d
+    store.put(merged)
+    return merged
 
-    rec["doi"] = d
+
+def fetch_paper(doi: str, store: Store, cfg: Config,
+                tried: Optional[List[Attempt]] = None) -> Optional[PaperRecord]:
+    """Everything known about a DOI: both catalogues merged, plus OA full text.
+
+    The exhaustive form, for callers that want the whole record regardless of any one
+    claim. ``resolve_claim`` deliberately does **not** use it — it climbs the same rungs
+    one at a time and stops as soon as the claim is grounded.
+    """
+    tried = tried if tried is not None else []
+    d = bare_doi(doi)
+    if not d:
+        return None
+
+    rec = _open_record(d, store, cfg, tried)
+    if rec is None or not rec.get("abstract") or not rec.get("pmcid"):
+        rec = _add_europepmc(rec, d, store, cfg, tried)
+    if rec is None:
+        return None
+
     _attach_fulltext(rec, store, cfg, tried)
     store.put(rec)
     return rec
+
+
+def _ground_on_record(claim: Claim, d: str, store: Store, cfg: Config,
+                      tried: List[Attempt], expected_title: str = "",
+                      ) -> Tuple[Optional[PaperRecord], Optional[Support]]:
+    """Climb the ladder against the DOI already on the edge, stopping the moment a
+    sentence in that paper grounds the claim.
+
+    Returns ``(paper, support)``. ``paper`` is None when the DOI resolves nowhere or the
+    title check rejects it; ``support`` is None when the paper resolved but nothing in
+    it names both of the claim's entities.
+    """
+    def rejected(r: Optional[PaperRecord]) -> bool:
+        if not expected_title or r is None:
+            return False
+        v = match.title_match(expected_title, r.get("title", ""))
+        if v.accept:
+            return False
+        tried.append(Attempt(r.get("source", "?"), "by_doi", "rejected", v.reason))
+        return True
+
+    def grounded(r: PaperRecord) -> Optional[Support]:
+        return sentence.best_support(claim, r.get("abstract", ""), r.get("fulltext", ""))
+
+    rec = _open_record(d, store, cfg, tried)
+    if rec is not None:
+        if rejected(rec):
+            return None, None
+        support = grounded(rec)
+        if support is not None:
+            return rec, support
+
+    # rung 2 — Europe PMC's abstract, only now that OpenAlex's did not carry the claim
+    merged = _add_europepmc(rec, d, store, cfg, tried)
+    if merged is None:
+        return None, None
+    if merged is not rec:
+        rec = merged
+        if rejected(rec):
+            return None, None
+        support = grounded(rec)
+        if support is not None:
+            return rec, support
+    if rec is None:
+        return None, None
+
+    # rung 3 — the whole paper, the expensive one, for open access only
+    _attach_fulltext(rec, store, cfg, tried)
+    if rec.get("fulltext"):
+        store.put(rec)
+        support = grounded(rec)
+        if support is not None:
+            return rec, support
+    return rec, None
 
 
 def _attach_fulltext(rec: PaperRecord, store: Store, cfg: Config,
@@ -185,37 +280,72 @@ def _attach_fulltext(rec: PaperRecord, store: Store, cfg: Config,
     if cached:
         rec["fulltext"] = cached
         return
-    text = litapi.epmc_fulltext(pmcid)
-    tried.append(Attempt("europepmc", "fulltext", "hit" if text else "miss", pmcid))
-    if text:
-        rec["fulltext"] = text
-        store.put_fulltext(rec["doi"], text)
+    # The most expensive call in the module — a whole paper — so make sure only one
+    # worker ever makes it for a given paper, and re-check the cache once inside.
+    with store.gate("ft:" + pmcid):
+        cached = store.get_fulltext(rec["doi"])
+        if cached:
+            rec["fulltext"] = cached
+            return
+        text = litapi.epmc_fulltext(pmcid)
+        tried.append(Attempt("europepmc", "fulltext", "hit" if text else "miss", pmcid))
+        if text:
+            rec["fulltext"] = text
+            store.put_fulltext(rec["doi"], text)
 
 
 # ---------------------------------------------------------------------------
 # the loop
 # ---------------------------------------------------------------------------
-def _search_rounds(claim: Claim, cfg: Config) -> List[Tuple[str, Callable[[], List[PaperRecord]]]]:
+def _search_rounds(claim: Claim,
+                   cfg: Config) -> List[Tuple[str, str, Callable[[], List[PaperRecord]]]]:
     """Query plans, cheapest and most specific first.
 
     Europe PMC leads because it indexes the biology literature more completely and
-    returns abstracts inline; OpenAlex is the second opinion. The last round drops the
-    species term, which is what rescues a conserved relationship reported in a
-    different organism.
+    returns abstracts inline. PubMed is second: one ``efetch`` brings back every hit
+    *with* its abstract, so a round costs two calls no matter how many candidates it
+    returns. The third round drops the species term, which is what rescues a conserved
+    relationship reported in a different organism.
+
+    OpenAlex is deliberately **last**. Its ``/works?`` search is metered — a free
+    account gets a small daily budget, then every call answers 429 until midnight UTC —
+    so it is spent only on the claims the free sources could not settle, and once the
+    budget is gone ``litapi`` skips it outright instead of retrying.
     """
     q = claim.query()
     n = cfg.candidates_per_round
     broad = " ".join(x for x in (sentence._readable(claim.entity_a),
                                  sentence._readable(claim.entity_b)) if x)
     return [
-        ("europepmc", lambda: litapi.epmc_search(q, n)),
-        # Sorted by citations, not relevance. Both engines rank recent work first, so a
+        ("europepmc", q, lambda: litapi.epmc_search(q, n)),
+        ("pubmed", q, lambda: litapi.pubmed_search(q, n)),
+        ("europepmc", broad, lambda: litapi.epmc_search(broad, n)),
+        # Sorted by citations, not relevance. Every engine ranks recent work first, so a
         # relevance search never surfaces the paper that established a relationship —
         # it surfaces this year's paper restating it. The seminal report is, almost by
         # definition, the most-cited one.
-        ("openalex", lambda: litapi.openalex_search(q, n, sort="cited_by_count:desc")),
-        ("openalex", lambda: litapi.openalex_search(broad, n)),
+        ("openalex", q, lambda: litapi.openalex_search(q, n, sort="cited_by_count:desc")),
     ][:max(1, cfg.max_rounds)]
+
+
+# One network asks the same question more than once: an edge A->B and a perturbation
+# test of A->B produce the same query, and the same query in the same round returns the
+# same papers. Memoised for the process, so the second claim pays nothing.
+_search_memo: Dict[str, List[PaperRecord]] = {}
+_search_memo_lock = threading.Lock()
+
+
+def _search_cached(source: str, query: str,
+                   run: Callable[[], List[PaperRecord]]) -> List[PaperRecord]:
+    key = f"{source}|{query}"
+    with _search_memo_lock:
+        hit = _search_memo.get(key)
+    if hit is not None:
+        return hit
+    out = run()
+    with _search_memo_lock:
+        _search_memo[key] = out
+    return out
 
 
 def resolve_claim(claim: Claim, doi: str, store: Store,
@@ -228,25 +358,17 @@ def resolve_claim(claim: Claim, doi: str, store: Store,
 
     # -- 1. the DOI on record ------------------------------------------------
     if original:
-        paper = fetch_paper(original, store, cfg, res.tried)
+        paper, support = _ground_on_record(claim, original, store, cfg,
+                                           res.tried, expected_title)
+        if support is not None:
+            res.status = VERIFIED
+            res.support = support
+            res.paper = paper
+            if not support.direction_ok:
+                res.reason = ("supporting sentence uses language opposite to the edge "
+                              "sign — check for mutant/loss-of-function phrasing")
+            return res
         if paper is not None:
-            if expected_title:
-                v = match.title_match(expected_title, paper.get("title", ""))
-                if not v.accept:
-                    res.tried.append(Attempt(paper.get("source", "?"), "by_doi",
-                                             "rejected", v.reason))
-                    paper = None
-        if paper is not None:
-            support = sentence.best_support(claim, paper.get("abstract", ""),
-                                            paper.get("fulltext", ""))
-            if support is not None:
-                res.status = VERIFIED
-                res.support = support
-                res.paper = paper
-                if not support.direction_ok:
-                    res.reason = ("supporting sentence uses language opposite to the edge "
-                                  "sign — check for mutant/loss-of-function phrasing")
-                return res
             res.tried.append(Attempt(paper.get("source", "?"), "by_doi", "ungrounded",
                                      f"paper does not co-mention "
                                      f"{claim.entity_a} and {claim.entity_b}"))
@@ -265,9 +387,9 @@ def resolve_claim(claim: Claim, doi: str, store: Store,
     ft_budget = cfg.fulltext_candidates
     found: List[Tuple[float, int, str, PaperRecord, Support, str]] = []
 
-    for source, run in _search_rounds(claim, cfg):
+    for source, query, run in _search_rounds(claim, cfg):
         try:
-            candidates = run()
+            candidates = _search_cached(source, query, run)
         except Exception as e:                      # a search failing is not fatal
             res.tried.append(Attempt(source, "search", "miss", f"error: {e}"))
             continue

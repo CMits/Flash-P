@@ -54,6 +54,14 @@ _GENERIC_HEADS = {
     "state", "index", "ratio", "amount", "production", "accumulation",
 }
 
+# Sections where a paper is restating what other people found, not reporting its own
+# result. A sentence lifted from an Introduction grounds the claim in that paper's
+# *citation* of someone else — which is one step further from the evidence than the
+# bare DOI we started with. Still usable, but it must lose to a real finding.
+_SECONDHAND_SECTIONS = re.compile(
+    r"^(introduction|background|overview|literature review|general discussion|"
+    r"concluding remarks|perspectives?|future)", re.I)
+
 _POSITIVE_CUES = (
     "promot", "activat", "induc", "increas", "enhanc", "upregulat", "up-regulat",
     "stimulat", "required for", "necessary for", "positively regulat", "positive regulator",
@@ -254,6 +262,15 @@ def best_support(claim: Claim, abstract: str, fulltext: str = "") -> Optional[Su
             located = locate(sent, abstract, fulltext)
             if located is None:
                 continue          # sentence splitter reshaped it; skip rather than fake it
+
+            # Demote second-hand sections only after locating, since that is where the
+            # section name comes from.
+            if located.locator.startswith("full_text:"):
+                section = located.locator.split(":", 1)[1]
+                if _SECONDHAND_SECTIONS.match(section.strip()):
+                    score -= 0.18
+                    if score <= best_score:
+                        continue
             best_score = score
             best = Support(quote=located.text, locator=located.locator,
                            confidence=round(min(score, 0.95), 2),
