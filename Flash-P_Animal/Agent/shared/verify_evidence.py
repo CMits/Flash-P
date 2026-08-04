@@ -39,7 +39,7 @@ from provenance import (                               # noqa: E402
     QUARANTINE, REPAIRED, VERIFIED, Claim, Config, Store,
     aliases_for, bare_doi, doi_slug, resolve_claim,
 )
-from provenance import litapi                          # noqa: E402
+from provenance import litapi, species                 # noqa: E402
 from provenance.store import default_path              # noqa: E402
 
 EVIDENCE_FILE = "evidence.json"
@@ -207,7 +207,20 @@ def _resolve_one(rec: dict, store: Store, cfg: Config) -> dict:
     claim: Claim = rec["claim"]
     res = resolve_claim(claim, rec["doi"], store, cfg)
     row = {k: v for k, v in rec.items() if k != "claim"}
+
+    # Which organism the evidence is actually about. Perturbation tests carry a curated
+    # species; edges do not, so it is read back out of the paper — supporting sentence
+    # first, then title, then abstract. Kept separate from the network's own species so
+    # the Studio can say "this came from somewhere else" rather than implying the claim
+    # was made in the modelled organism.
+    curated = (rec.get("sp") or "").strip()
+    paper = res.paper or {}
+    detected = "" if curated else species.detect_species(
+        res.support.quote if res.support else "",
+        paper.get("title", ""), paper.get("abstract", ""))
     row.update({
+        "species": curated or detected,
+        "species_source": "curated" if curated else ("paper" if detected else ""),
         "doi": res.doi,
         "evidence": res.support.quote if res.support else "",
         "source_locator": res.support.locator if res.support else "",

@@ -40,6 +40,11 @@ Provenance in the **data files** is a single `doi` string (key `d`) on each edge
 ```json
 "d": "10.xxxx/..."
 ```
+Each claim also records the **organism the evidence actually came from** — curated on perturbation
+tests, read back from the paper for edges — so a wheat network built largely on Arabidopsis papers
+says so instead of reading as wheat throughout. The Studio shows it as a Species column and flags
+anything outside the modelled species.
+
 The proof behind that DOI lives once per network in **`data/evidence.json`** (written by Step 1.6,
 never hand-edited): per claim the verbatim supporting sentence, where it sits (`abstract` or
 `full_text:<Section>`), the verification status (`verified` / `repaired` / `quarantine`) and the

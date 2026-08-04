@@ -135,10 +135,12 @@ def _evidence_inputs(network_dir: Path, papers: dict, fulltexts: dict,
         "summary": ev.get("summary") or {},
         "edges": slim(ev.get("edges") or [],
                       ("s", "t", "x", "doi", "evidence", "source_locator",
-                       "verification", "verification_reason", "confidence", "previous_doi")),
+                       "verification", "verification_reason", "confidence", "previous_doi",
+                       "species", "species_source")),
         "perts": slim(ev.get("perturbations") or [],
                       ("id", "g", "pt", "ed", "sp", "doi", "evidence", "source_locator",
-                       "verification", "verification_reason", "confidence", "previous_doi")),
+                       "verification", "verification_reason", "confidence", "previous_doi",
+                       "species", "species_source")),
     }
 
 

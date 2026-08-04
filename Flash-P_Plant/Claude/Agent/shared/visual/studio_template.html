@@ -20,11 +20,15 @@
       --border: #e6ddd3; --grid: #ece4da; --accent: #d14600;
       --primary: #d14600; --primary-fg: #fdf8f3; --secondary: #f1e9e1; --ring: #d14600;
       --destructive: #dc2626; --pos: #2c7fb8; --neg: #d7301f;
+      /* Evidence borrowed from another organism — a caution, not an error, so amber
+         rather than the destructive red used for failures. */
+      --warn: #b45309;
     }
     html.dark {
       --bg: hsl(192 32% 7%); --fg: #e9efe9; --muted: #93a7a0; --card: #11242a;
       --border: #24383f; --grid: rgba(120,150,140,0.16); --accent: #ff7a1a;
       --primary: #ff7a1a; --primary-fg: #11242a; --secondary: #1b2e34; --ring: #ff7a1a;
+      --warn: #fbbf24;                 /* lifted for contrast on the dark card */
     }
     * { box-sizing: border-box; }
     html, body { height: 100%; margin: 0; }
@@ -316,6 +320,12 @@
     .ev-filter .pill.active .qt { color: var(--primary-fg); opacity: .8; }
     /* Separates the two independent choices: which kind of claim, which status. */
     .ev-filter .pill-sep { width: 1px; align-self: stretch; margin: 0 5px; background: var(--border); }
+    /* Species: italic because it is a binomial, and amber when the claim comes from an
+       organism other than the one being modelled — the one case a reader must not miss. */
+    .sp { font-style: italic; white-space: nowrap; }
+    .sp.foreign { color: var(--warn, #b45309); font-weight: 600; font-style: italic; }
+    .chip.sp.foreign { border-color: var(--warn, #b45309); }
+    .spcell { white-space: nowrap; }
     .evwrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 11px; background: var(--card); }
     .evtable { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 640px; }
     .evtable th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); border-bottom: 1px solid var(--border); padding: 8px 10px; white-space: nowrap; }
@@ -588,10 +598,26 @@
         : esc(rec.s) + ' <span style="color:' + (rec.x < 0 ? 'var(--neg)' : 'var(--pos)') + '">' +
           (rec.x < 0 ? '⊣' : '→') + '</span> ' + esc(rec.t);
 
+      var netSp = (bySlug[curSlug] || {}).species || '';
+      var sp = rec.species || rec.sp || '';
       var html = '<div class="claim">' + claim + '</div>' +
         '<div style="margin:8px 0 12px">' + evBadge(rec.verification) +
         (rec.confidence ? ' <span class="chip">confidence ' + rec.confidence + '</span>' : '') +
-        (kind === 'pert' && rec.sp ? ' <span class="chip">' + esc(rec.sp) + '</span>' : '') + '</div>';
+        (sp ? ' <span class="chip sp' + (foreignSpecies(sp, netSp) ? ' foreign' : '') + '">' +
+          esc(sp) + '</span>' : '') + '</div>';
+
+      // Spelled out rather than left to a coloured chip: a reader skimming one claim
+      // needs to know the finding is from another organism *before* they read the
+      // sentence and assume it was measured in the species being modelled.
+      if (sp && foreignSpecies(sp, netSp)) {
+        html += '<div class="evnote">This evidence comes from <b>' + esc(sp) + '</b>, not ' +
+          esc(netSp || 'the network\'s species') + '. The relationship is assumed to carry ' +
+          'over — reasonable for conserved biology, worth checking for anything ' +
+          'species-specific.' +
+          (rec.species_source === 'paper'
+            ? ' (Organism read from the source paper, not curated by hand.)' : '') +
+          '</div>';
+      }
 
       if (rec.verification === 'repaired' && rec.previous_doi) {
         html += '<div class="evnote">The DOI originally on this claim was <b>' + esc(rec.previous_doi) +
@@ -943,6 +969,40 @@
       };
     }
 
+    // ---- species ----
+    // A network is built for one organism; its literature often is not. Showing which
+    // organism each claim actually came from is the difference between "wheat model"
+    // and "wheat model, most of whose evidence is Arabidopsis" — and the reader cannot
+    // tell those apart without it.
+    function normSpecies(s) {
+      return String(s || '').replace(/\([^)]*\)/g, ' ')
+        .replace(/\b(heterologous|grafted|ssp\.?|subsp\.?|var\.?|cv\.?)\b/gi, ' ')
+        .replace(/[^A-Za-z ]+/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+    }
+    // Genus-level agreement is close enough: T. turgidum inside a T. aestivum network
+    // is not the surprise worth flagging — Arabidopsis is.
+    function foreignSpecies(claimSp, netSp) {
+      var a = normSpecies(claimSp), b = normSpecies(netSp);
+      if (!a || !b || a === b) return false;
+      return a.split(' ')[0] !== b.split(' ')[0];
+    }
+    function shortSpecies(s) {
+      var t = String(s || '').replace(/\s*\([^)]*\)/g, '').trim().split(/\s+/);
+      return (t.length >= 2 && /^[A-Z]/.test(t[0])) ? t[0][0] + '. ' + t[1] : t.join(' ');
+    }
+    // `title` carries the full binomial and where it came from, so the abbreviated cell
+    // never costs the reader information — it is one hover away.
+    function speciesHtml(rec, netSp) {
+      var sp = rec.species || rec.sp || '';
+      if (!sp) return '<span class="qt">—</span>';
+      var foreign = foreignSpecies(sp, netSp);
+      var how = rec.species_source === 'paper' ? 'read from the paper'
+        : rec.species_source === 'curated' ? 'recorded with the test' : '';
+      return '<span class="sp' + (foreign ? ' foreign' : '') + '" title="' + esc(sp) +
+        (how ? ' — ' + how : '') + (foreign ? ' — not the network\'s species' : '') + '">' +
+        esc(shortSpecies(sp)) + '</span>';
+    }
+
     // ================= EVIDENCE VIEW =================
     var evFilter = 'all';
     // Edges and perturbation tests used to be stacked, so reaching a test meant
@@ -1011,9 +1071,9 @@
 
       var table = function (rows, kind) {
         if (!rows.length) return '';
-        var head = kind === 'pert'
-          ? '<th>Perturbation</th><th>Status</th><th>Paper</th><th>Supporting sentence</th>'
-          : '<th>Edge</th><th>Status</th><th>Paper</th><th>Supporting sentence</th>';
+        var head = (kind === 'pert' ? '<th>Perturbation</th>' : '<th>Edge</th>') +
+          '<th>Status</th><th>Species</th><th>Paper</th><th>Supporting sentence</th>';
+        var netSp = (net.species || '');
         var body = rows.map(function (r, i) {
           var claim = kind === 'pert'
             ? esc(r.g) + ' ' + esc(r.pt || '') + ' → ' + esc(r.ed || '')
@@ -1027,6 +1087,7 @@
           return '<tr data-kind="' + kind + '" data-i="' + i + '">' +
             '<td class="cl">' + claim + '</td>' +
             '<td>' + evBadge(r.verification) + '</td>' +
+            '<td class="spcell">' + speciesHtml(r, netSp) + '</td>' +
             '<td>' + title + '</td>' +
             '<td class="qt">' + quote + '</td></tr>';
         }).join('');

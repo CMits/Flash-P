@@ -48,12 +48,26 @@ chat history in context.
 
    | After Step 1 | `flashp-literature-judge` (1.5) → **[Step 1.6 script]** → `flashp-builder` (2) → `flashp-judge` (2.5) → `flashp-perturbation` (3) → `flashp-validator` (4) → `flashp-refinement` (5) → `flashp-export` (6) |
 
-4. **Final report.** When Step 6 finishes, run
+4. **Step 7 — STUDIO — run the script in THIS thread, after EXPORT.**
+   ```bash
+   python Agent/shared/network_to_studio.py networks
+   ```
+   Deterministic Python, **zero model tokens**, a few seconds. Rebuilds
+   `networks/Flash-P_Studio.html` — one self-contained offline file with every network, its
+   evidence drawer and the simulator — and opens it in the browser so the run ends on something
+   the user can look at rather than a wall of paths. Add `--no-open` if a browser must not be
+   launched (headless, cron). This is the run's shareable artifact: it needs no server, no
+   internet and no install, so it can be sent to a collaborator as-is.
+
+5. **Final report.** When Step 6 finishes, run
    `python Agent/shared/validate_schema.py --network . --quiet` and report: best method + accuracy +
    Cohen's κ, node/edge/test counts, FRS/DARS, any failures, and the list of generated artifact dirs.
    **Always state the provenance counts** from Step 1.6 — verified / repaired / quarantined for edges
    and for tests, and how many papers had open-access full text. A network's accuracy means little
-   without saying how much of it is actually sourced.
+   without saying how much of it is actually sourced. Also say **which organisms the evidence came
+   from** when they are not the modelled species — a wheat network built mostly on Arabidopsis
+   papers is a different object from one built on wheat papers, and the Studio's Species column
+   now makes that checkable.
 
 ## Token discipline (keep cache writes minimal — this is the whole point of the autonomous run)
 
