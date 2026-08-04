@@ -310,6 +310,12 @@
     .ev-filter { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 12px; font-size: 12px; }
     .ev-filter .pill { border: 1px solid var(--border); border-radius: 999px; padding: 3px 11px; cursor: pointer; font-weight: 600; background: var(--card); }
     .ev-filter .pill.active { background: var(--primary); color: var(--primary-fg); border-color: var(--primary); }
+    /* The count inside a pill is secondary to its label — until the pill is active,
+       where it has to ride the inverted background rather than stay grey. */
+    .ev-filter .pill .qt { opacity: .65; font-weight: 500; }
+    .ev-filter .pill.active .qt { color: var(--primary-fg); opacity: .8; }
+    /* Separates the two independent choices: which kind of claim, which status. */
+    .ev-filter .pill-sep { width: 1px; align-self: stretch; margin: 0 5px; background: var(--border); }
     .evwrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 11px; background: var(--card); }
     .evtable { width: 100%; border-collapse: collapse; font-size: 12.5px; min-width: 640px; }
     .evtable th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); border-bottom: 1px solid var(--border); padding: 8px 10px; white-space: nowrap; }
@@ -939,6 +945,11 @@
 
     // ================= EVIDENCE VIEW =================
     var evFilter = 'all';
+    // Edges and perturbation tests used to be stacked, so reaching a test meant
+    // scrolling past every edge. They are separate questions about the network, so
+    // they get a switch rather than a scroll. 'edge' first because edges are what the
+    // model is built from; 'both' keeps the old combined view for anyone who wants it.
+    var evKind = 'edge';
 
     function openEvidence(slug) {
       destroyApps();
@@ -969,17 +980,34 @@
         '<span class="chip">' + (sum.papers || 0) + ' papers, ' +
         (sum.papers_with_fulltext || 0) + ' open access</span>';
 
-      var fb = document.getElementById('ev-filter');
-      fb.innerHTML = ['all', 'verified', 'repaired', 'quarantine'].map(function (k) {
-        return '<span class="pill' + (evFilter === k ? ' active' : '') + '" data-f="' + k + '">' +
-          (k === 'all' ? 'All' : STATUS_LABEL[k]) + '</span>';
-      }).join('');
-      Array.prototype.forEach.call(fb.querySelectorAll('.pill'), function (b) {
-        b.onclick = function () { evFilter = b.getAttribute('data-f'); renderEvidence(); };
-      });
-
       var keep = function (r) { return evFilter === 'all' || r.verification === evFilter; };
       var edges = idx.list.filter(keep), perts = idx.plist.filter(keep);
+
+      // Two independent choices: which kind of claim, and which verification status.
+      // Counts on the kind pills are post-status, so "Edges 19" under the unverified
+      // filter reads as "19 edges are unverified" rather than a fixed total.
+      var fb = document.getElementById('ev-filter');
+      var kinds = [['edge', 'Edges', edges.length],
+                   ['pert', 'Perturbation tests', perts.length],
+                   ['both', 'Both', edges.length + perts.length]];
+      fb.innerHTML =
+        kinds.map(function (k) {
+          return '<span class="pill' + (evKind === k[0] ? ' active' : '') +
+            '" data-k="' + k[0] + '">' + k[1] +
+            ' <span class="qt">' + k[2] + '</span></span>';
+        }).join('') +
+        '<span class="pill-sep" aria-hidden="true"></span>' +
+        ['all', 'verified', 'repaired', 'quarantine'].map(function (k) {
+          return '<span class="pill' + (evFilter === k ? ' active' : '') + '" data-f="' + k + '">' +
+            (k === 'all' ? 'All' : STATUS_LABEL[k]) + '</span>';
+        }).join('');
+      Array.prototype.forEach.call(fb.querySelectorAll('.pill'), function (b) {
+        b.onclick = function () {
+          if (b.hasAttribute('data-k')) evKind = b.getAttribute('data-k');
+          else evFilter = b.getAttribute('data-f');
+          renderEvidence();
+        };
+      });
 
       var table = function (rows, kind) {
         if (!rows.length) return '';
@@ -1002,16 +1030,22 @@
             '<td>' + title + '</td>' +
             '<td class="qt">' + quote + '</td></tr>';
         }).join('');
-        return '<h3 style="font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:18px 0 6px">' +
-          (kind === 'pert' ? 'Perturbation tests' : 'Edges') + ' (' + rows.length + ')</h3>' +
-          '<div class="evwrap"><table class="evtable"><thead><tr>' + head +
+        // The heading only earns its space when both tables are on screen; with one
+        // kind selected the active pill above already says which, and how many.
+        var h3 = evKind !== 'both' ? '' :
+          '<h3 style="font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:18px 0 6px">' +
+          (kind === 'pert' ? 'Perturbation tests' : 'Edges') + ' (' + rows.length + ')</h3>';
+        return h3 + '<div class="evwrap"><table class="evtable"><thead><tr>' + head +
           '</tr></thead><tbody>' + body + '</tbody></table></div>';
       };
 
+      var shown = (evKind === 'pert' ? '' : table(edges, 'edge')) +
+                  (evKind === 'edge' ? '' : table(perts, 'pert'));
       var content = document.getElementById('ev-content');
-      content.innerHTML = (edges.length || perts.length)
-        ? table(edges, 'edge') + table(perts, 'pert')
-        : '<div class="ev-empty">No claims with this status.</div>';
+      content.innerHTML = shown ||
+        '<div class="ev-empty">No ' +
+        (evKind === 'pert' ? 'perturbation tests' : evKind === 'edge' ? 'edges' : 'claims') +
+        ' with this status.</div>';
 
       Array.prototype.forEach.call(content.querySelectorAll('tbody tr'), function (tr) {
         tr.onclick = function () {
