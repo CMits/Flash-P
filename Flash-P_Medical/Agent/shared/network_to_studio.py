@@ -17,7 +17,8 @@ Usage:
     python Agent/shared/network_to_studio.py <networks_dir> [--no-open]
 
   <networks_dir> is the folder that CONTAINS your trait networks (e.g. `networks`
-  or `Networks_Flash-P`). Every `*/network/network.json` beneath it is embedded.
+  or `Networks_Flash-P`). Each trait is embedded ONCE, from its final
+  `<trait>/network/network.json` — the `refinement/iteration_N/` snapshots are skipped.
   By default the finished Studio auto-opens in your default browser; pass
   --no-open to just write the file (e.g. for headless / scripted runs).
 
@@ -120,14 +121,41 @@ def build_network_entry(network_dir: Path) -> dict:
     return entry
 
 
+ITERATION_PREFIX = "iteration_"
+
+
+def _trait_of(network_dir: Path, root: Path):
+    """Map a network dir to (trait folder, refinement iteration or None).
+
+    Step 5 snapshots every refinement round to `<trait>/refinement/iteration_N/network/`,
+    so a refined trait has several `network/network.json` files. They are earlier drafts of
+    the SAME trait, not separate networks, and must collapse back onto the trait folder.
+    """
+    parts = network_dir.relative_to(root).parts
+    if "refinement" not in parts:
+        return network_dir, None
+    i = parts.index("refinement")
+    iteration = -1
+    if len(parts) > i + 1 and parts[i + 1].startswith(ITERATION_PREFIX):
+        try:
+            iteration = int(parts[i + 1][len(ITERATION_PREFIX):])
+        except ValueError:
+            iteration = -1
+    return root.joinpath(*parts[:i]), iteration
+
+
 def find_networks(root: Path):
-    """All network dirs (folders containing network/network.json) beneath root."""
-    seen = []
+    """The FINAL network dir for each trait beneath root (one entry per trait)."""
+    best = {}  # trait folder -> (rank, network dir)
     for nf in sorted(root.glob("**/network/network.json")):
         network_dir = nf.parent.parent
-        if network_dir not in seen:
-            seen.append(network_dir)
-    return seen
+        trait, iteration = _trait_of(network_dir, root)
+        # The trait's own `network/` is the final, post-refinement model, so it wins outright;
+        # only if a trait has nothing but snapshots does the highest iteration_N stand in.
+        rank = (1, 0) if iteration is None else (0, iteration)
+        if trait not in best or rank > best[trait][0]:
+            best[trait] = (rank, network_dir)
+    return [best[t][1] for t in sorted(best)]
 
 
 def _script(path: Path) -> str:
