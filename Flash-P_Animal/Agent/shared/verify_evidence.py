@@ -272,6 +272,40 @@ def verify_records(records: List[dict], store: Store, cfg: Config,
     return out  # type: ignore[return-value]
 
 
+def fill_species_by_paper(*row_sets: List[dict]) -> int:
+    """Give every claim the organism already established for its own paper.
+
+    A paper is about one organism, so a species found for any claim on a DOI holds for
+    every other claim on it. Detection reads the supporting sentence first, and plenty
+    of sentences state a mechanism without naming the species — "The SOS2-SOS3 kinase
+    complex up-regulates SOS1" — while a sibling claim on the same paper hit a sentence
+    that did. On the salinity network this fills 14 of 31 blanks for free.
+
+    A curated species wins over a detected one for the same DOI: it was recorded by hand
+    from the experiment, not inferred from prose.
+    """
+    known: Dict[str, Tuple[str, str]] = {}
+    for rows in row_sets:
+        for r in rows:
+            doi, sp = r.get("doi"), r.get("species")
+            if not doi or not sp:
+                continue
+            src = r.get("species_source") or "paper"
+            if doi not in known or (src == "curated" and known[doi][1] != "curated"):
+                known[doi] = (sp, src)
+
+    filled = 0
+    for rows in row_sets:
+        for r in rows:
+            if r.get("species") or not r.get("doi"):
+                continue
+            hit = known.get(r["doi"])
+            if hit:
+                r["species"], r["species_source"] = hit[0], "paper"
+                filled += 1
+    return filled
+
+
 def _retry_config(cfg: Config) -> Config:
     """A deeper budget for the second pass.
 
@@ -499,6 +533,9 @@ def verify_network(net: str, cfg: Config, apply: bool = False,
         e_rows, e_got, e_try = second_pass(edges, e_rows, store, cfg, "edge", quiet, workers)
         t_rows, t_got, t_try = second_pass(tests, t_rows, store, cfg, "test", quiet, workers)
         retry = (e_got + t_got, e_try + t_try)
+
+        # Needs every claim resolved first — it borrows across claims that share a paper.
+        fill_species_by_paper(e_rows, t_rows)
 
         dois = [r["doi"] for r in e_rows + t_rows if r["doi"]]
         fulltexts = write_fulltexts(net, dois, store)
