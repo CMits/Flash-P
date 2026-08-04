@@ -259,6 +259,55 @@ def verify_records(records: List[dict], store: Store, cfg: Config,
     return out  # type: ignore[return-value]
 
 
+def _retry_config(cfg: Config) -> Config:
+    """A deeper budget for the second pass.
+
+    Only the claims the first pass could not ground reach it — a fraction of the
+    network — so it can afford several times the effort per claim and still cost
+    seconds. The grounding rule itself is untouched: this buys more places to look, not
+    a lower bar for what counts as support.
+    """
+    return Config(
+        max_rounds=4,                    # including the citation-sorted OpenAlex round
+        candidates_per_round=16,
+        min_candidates_before_pick=3,    # look at real alternatives before choosing
+        fulltext=cfg.fulltext,
+        fulltext_candidates=4,
+        offline=cfg.offline,
+        descriptive_query=True,          # the actual fix — see Claim.query
+    )
+
+
+def second_pass(records: List[dict], rows: List[dict], store: Store, cfg: Config,
+                kind: str, quiet: bool = False, workers: int = 1) -> Tuple[List[dict], int, int]:
+    """Try again, harder, on just the claims the first pass could not ground.
+
+    Returns ``(rows, recovered, attempted)``. The retry's row always replaces the first
+    one — even when it fails again — with both attempt trails concatenated, so
+    ``evidence.json`` shows everything that was tried rather than only the last thing.
+    """
+    idx = [i for i, r in enumerate(rows) if r["verification"] == QUARANTINE]
+    if not idx or cfg.offline:
+        return rows, 0, len(idx)
+
+    if not quiet:
+        print(f"  second pass: {len(idx)} ungrounded {kind} claim(s), "
+              f"searching by full name")
+    again = verify_records([records[i] for i in idx], store, _retry_config(cfg),
+                           kind, quiet, workers)
+
+    recovered = 0
+    for slot, row in zip(idx, again):
+        row["tried"] = (rows[slot]["tried"]
+                        + [{"source": "-", "action": "search", "outcome": "retry",
+                            "note": "second pass, searching by full name"}]
+                        + row["tried"])
+        if row["verification"] != QUARANTINE:
+            recovered += 1
+        rows[slot] = row
+    return rows, recovered, len(idx)
+
+
 def _print_progress(kind: str, i: int, total: int, claim: Claim, row: dict) -> None:
     mark = {VERIFIED: "ok ", REPAIRED: "fix", QUARANTINE: "QRN"}[row["verification"]]
     extra = f" -> {row['doi']}" if row["verification"] == REPAIRED else ""
@@ -305,44 +354,63 @@ def build_papers(dois: List[str], store: Store, fulltexts: Dict[str, str]) -> Di
     return papers
 
 
-def apply_repairs(net: str, edges: List[dict], tests: List[dict]) -> int:
-    """Write repaired DOIs back into the Step 1 files, preserving the Light shape.
+def apply_repairs(net: str, edges: List[dict], tests: List[dict]) -> Tuple[int, int]:
+    """Write repaired DOIs and the ungrounded flag back into the Step 1 files.
 
-    Only DOIs change. Nothing is added, removed or reordered, so the BUILDER sees the
-    same repository it would have seen — with references that now point at the papers
-    the claims actually came from.
+    Two things change, and nothing else: a repaired claim gets the DOI of the paper that
+    actually states it, and a claim that could not be grounded gets ``verification: "q"``
+    so the BUILDER can see it. Nothing is added, removed or reordered — the ungroundable
+    claims stay in the repository, because most of them are process links the cascade
+    needs, and deleting them would quietly cost real biology (CLAUDE.md Rule 12).
+
+    The flag is cleared when a claim is grounded, so a later run that finds the paper
+    leaves no stale warning behind. Returns ``(dois_changed, flags_set)``.
     """
-    changed = 0
+    changed = flagged = 0
+
+    def stamp(rec: dict, status: str) -> int:
+        """Set or clear the ungrounded marker. Returns 1 if it was newly set."""
+        if status == QUARANTINE:
+            was = rec.get("verification") == "q"
+            rec["verification"] = "q"
+            return 0 if was else 1
+        rec.pop("verification", None)
+        return 0
 
     cur_path = os.path.join(net, "data", "curated_edges.json")
     if os.path.isfile(cur_path):
         data = light_io.load(cur_path)
-        fixed = {(r["s"], r["t"], r["x"]): r["doi"]
-                 for r in edges if r["verification"] == REPAIRED and r["doi"]}
+        by_key = {(r["s"], r["t"], r["x"]): r for r in edges}
         for e in data.get("edges", []):
-            key = (e.get("source"), e.get("target"), int(e.get("sign", 0) or 0))
-            if key in fixed and e.get("doi") != fixed[key]:
-                e["doi"] = fixed[key]
-                e["evidence"] = [{"doi": fixed[key]}]
+            row = by_key.get((e.get("source"), e.get("target"),
+                              int(e.get("sign", 0) or 0)))
+            if row is None:
+                continue
+            if row["verification"] == REPAIRED and row["doi"] and e.get("doi") != row["doi"]:
+                e["doi"] = row["doi"]
+                e["evidence"] = [{"doi": row["doi"]}]
                 changed += 1
-        if fixed:
+            flagged += stamp(e, row["verification"])
+        if by_key:
             light_io.dump_slim(cur_path, data, "curated_edges")
 
     pert_path = os.path.join(net, "data", "perturbation_dataset.json")
     if os.path.isfile(pert_path):
         data = light_io.load(pert_path)
-        fixed = {r["id"]: r["doi"] for r in tests
-                 if r["verification"] == REPAIRED and r["doi"]}
+        by_id = {r["id"]: r for r in tests}
         for p in data.get("perturbations", []):
-            tid = p.get("test_id")
-            if tid in fixed and p.get("doi") != fixed[tid]:
-                p["doi"] = fixed[tid]
-                p["evidence"] = [{"doi": fixed[tid]}]
+            row = by_id.get(p.get("test_id"))
+            if row is None:
+                continue
+            if row["verification"] == REPAIRED and row["doi"] and p.get("doi") != row["doi"]:
+                p["doi"] = row["doi"]
+                p["evidence"] = [{"doi": row["doi"]}]
                 changed += 1
-        if fixed:
+            flagged += stamp(p, row["verification"])
+        if by_id:
             light_io.dump_slim(pert_path, data, "perturbation_dataset")
 
-    return changed
+    return changed, flagged
 
 
 # ---------------------------------------------------------------------------
@@ -356,7 +424,8 @@ def summarise(rows: List[dict]) -> Dict[str, int]:
 
 
 def print_report(name: str, edges: List[dict], tests: List[dict],
-                 papers: Dict[str, dict], elapsed: float) -> None:
+                 papers: Dict[str, dict], elapsed: float,
+                 retry: Tuple[int, int] = (0, 0)) -> None:
     e, t = summarise(edges), summarise(tests)
     n_e, n_t = len(edges), len(tests)
     oa = sum(1 for p in papers.values() if p["has_fulltext"])
@@ -371,6 +440,9 @@ def print_report(name: str, edges: List[dict], tests: List[dict],
     if total:
         print(f"\ngrounded: {good}/{total} ({100.0 * good / total:.0f}%)   "
               f"papers: {len(papers)} ({abs_ok} with abstract, {oa} with open-access full text)")
+    if retry[1]:
+        print(f"second pass: recovered {retry[0]} of {retry[1]} that the first pass "
+              f"could not ground")
     print(f"time: {elapsed:.0f}s   {litapi.STATS}")
     # Which endpoint the wall-clock actually went to — the totals alone can't tell a
     # whole-paper full-text download apart from a metadata lookup.
@@ -411,6 +483,10 @@ def verify_network(net: str, cfg: Config, apply: bool = False,
         e_rows = verify_records(edges, store, cfg, "edge", quiet, workers)
         t_rows = verify_records(tests, store, cfg, "test", quiet, workers)
 
+        e_rows, e_got, e_try = second_pass(edges, e_rows, store, cfg, "edge", quiet, workers)
+        t_rows, t_got, t_try = second_pass(tests, t_rows, store, cfg, "test", quiet, workers)
+        retry = (e_got + t_got, e_try + t_try)
+
         dois = [r["doi"] for r in e_rows + t_rows if r["doi"]]
         fulltexts = write_fulltexts(net, dois, store)
         papers = build_papers(dois, store, fulltexts)
@@ -440,12 +516,13 @@ def verify_network(net: str, cfg: Config, apply: bool = False,
         json.dump(evidence, f, ensure_ascii=False, indent=2)
 
     if apply:
-        n = apply_repairs(net, e_rows, t_rows)
+        n, flags = apply_repairs(net, e_rows, t_rows)
         if not quiet:
-            print(f"\napplied {n} repaired DOI(s) back to data/")
+            print(f"\napplied {n} repaired DOI(s) back to data/"
+                  + (f"; flagged {flags} claim(s) as ungrounded (v: q)" if flags else ""))
 
     if not quiet:
-        print_report(name, e_rows, t_rows, papers, time.time() - started)
+        print_report(name, e_rows, t_rows, papers, time.time() - started, retry)
         print(f"\nwrote {out_path}")
     return evidence
 

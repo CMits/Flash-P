@@ -186,6 +186,12 @@ Trace: MAX2 -> SMXL678 (negative), SMXL678 -> BRC1 (negative)
 Before adding any edge `A → B`, answer the following in order. If any answer is "no" or "unclear", the edge is **deferred** to the next iteration, not added.
 
 1. **Evidence** — Do I have a DOI with an `evidence_sentence` that directly supports this edge? (If no: not an edge; at best a hypothesis. Don't add.)
+   - **Check `v` first.** Step 1.6 marks an edge `"v": "q"` when it could find **no paper stating that claim** — the DOI resolves, but nothing in it names both entities. Absence of `v` means grounded; treat those as evidenced.
+   - A `v: q` edge is **not automatically wrong**. Two very different cases hide behind it, and you must say which one you are looking at:
+     - *Model-construct wording.* One end is a PROCESS / PHENOTYPE node whose name (`Na_Exclusion_Xylem`, `Stress_Gene_Expression`) is the model's own vocabulary, not a phrase any paper prints. The biology is usually sound; the string match failed. **This is the majority of flags.**
+     - *A claim nobody states.* Both ends are concrete (gene, hormone, metabolite) and still nothing supports it. Treat this as a probable fabrication or a mis-citation — **do not put it in `network.json`.**
+   - **Include a `v: q` edge only when the cascade needs it** to keep a node connected to the phenotype (Rule 1 / Anti-Pattern 1), and then say so explicitly in that edge's `mechanism`: what the link is, and that Step 1.6 could not ground it. If the cascade survives without it, leave it in `curated_edges.json` and out of the model.
+   - Never delete a `v: q` entry from `curated_edges.json`, and never clear the flag by hand. The repository records what was found; only Step 1.6 writes `v`.
 2. **Mechanism** — Can I write a one-sentence `mechanism` for this edge? Example: *"D14-MAX2 complex ubiquitinates SMXL678 for proteasomal degradation."* (If I can only write vague "X regulates Y", the biology is too fuzzy — defer.)
 3. **Cascade role** — Does adding this edge extend or create a path from a source to the phenotype? Name the path. (If the edge doesn't participate in any cascade to the phenotype, it belongs in `curated_edges.json` only, not `network.json`. See Anti-Pattern 1.)
 4. **Feedback audit** — Does this edge close a loop with existing edges? If yes: is it **negative feedback** (stabilizing, usually OK) or **positive feedback** (dangerous — see Trap 1)? (Defer if positive feedback unless the biology truly requires it.)

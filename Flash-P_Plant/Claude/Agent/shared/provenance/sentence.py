@@ -39,6 +39,10 @@ __all__ = ["Claim", "Support", "aliases_for", "best_support"]
 # Two-letter genus/species tags that prefix gene symbols (ZmEPF2, AtBRC1, OsD27).
 # Only stripped when what follows still looks like a symbol, so the metabolite
 # node "Ca" is never mistaken for a prefixed name.
+# TaHKT1_5D / TmHKT1_4A — a symbol, then digits, then an underscore standing in for the
+# ";" the literature uses, then the copy number and an optional homoeolog letter.
+_SEMICOLON_GENE = re.compile(r"^([A-Za-z]{0,3}[A-Z][A-Za-z]*\d+)_(\d+)([A-Za-z]?)$")
+
 _SPECIES_PREFIX = re.compile(
     r"^(Zm|At|Os|Ta|Sl|Gm|Hv|Bd|Nt|Pt|Md|Vv|Ph|Ps|Le|Cs|Br|Mt|Sb|Si|Pp|Cr|Dm|Hs|Mm|Rn)"
     r"(?=[A-Z][A-Za-z0-9]{1,})")
@@ -93,16 +97,60 @@ class Claim:
     aliases_b: Set[str] = field(default_factory=set)
     label: str = ""
 
-    def query(self) -> str:
-        """Free-text search string used when the DOI has to be re-found."""
-        bits = [_readable(self.entity_a), _readable(self.entity_b)]
+    def query(self, descriptive: bool = False) -> str:
+        """Free-text search string used when the DOI has to be re-found.
+
+        The default form uses the node ids, which is right for gene symbols — a paper
+        about BRC1 says "BRC1". It is wrong for the model's own process nodes: searching
+        *"Na Exclusion Xylem Response To Salinity"* asks for a string no paper contains,
+        so the round comes back with nothing and the claim is quarantined over wording.
+
+        ``descriptive=True`` swaps each entity for the most descriptive name we hold for
+        it — in practice the ``fn`` from ``node_annotations.json``, e.g. *"Na+ exclusion
+        from the xylem"* — and drops the parenthetical common name from the species
+        ("Triticum aestivum (wheat)" -> "Triticum aestivum"), which otherwise puts the
+        word *wheat* in every query. Used by the second pass over claims the first pass
+        could not ground.
+        """
+        if descriptive:
+            a = _most_descriptive(self.entity_a, self.aliases_a)
+            b = _most_descriptive(self.entity_b, self.aliases_b)
+        else:
+            a, b = _readable(self.entity_a), _readable(self.entity_b)
+        bits = [a, b]
         if self.species:
-            bits.append(self.species)
+            bits.append(re.sub(r"\s*\([^)]*\)", "", self.species).strip()
+                        if descriptive else self.species)
         return " ".join(b for b in bits if b)
 
 
 def _readable(name: str) -> str:
     return re.sub(r"[_]+", " ", str(name or "")).strip()
+
+
+def _most_descriptive(name: str, aliases: Set[str]) -> str:
+    """The name a paper is most likely to actually print, for search purposes.
+
+    Two opposite cases, and getting them the same way round matters:
+
+    * **The entity has a symbol** (``MOCA1``, ``AREB1``, ``TaHKT1_5D``) — keep it. The
+      literature searches by symbol; swapping in the expansion makes the query *worse*
+      ("MONOCATION-INDUCED [Ca2+]i INCREASES 1" finds far less than "MOCA1").
+    * **The entity has no symbol** — it is one of the model's own process or phenotype
+      nodes, and its id is not a phrase anyone writes. Use the longest multi-word alias,
+      which is where the ``fn`` full name lands: "Na+ exclusion from the xylem" rather
+      than "Na_Exclusion_Xylem".
+
+    The symbol test matches ``aliases_for``'s: short, unspaced, carrying a capital or a
+    digit.
+    """
+    has_symbol = any(len(a) <= 8 and " " not in a and re.search(r"[A-Z0-9]", a)
+                     for a in aliases)
+    if not has_symbol:
+        phrases = [a for a in aliases if " " in a.strip()]
+        if phrases:
+            return max(phrases, key=len)
+    return _readable(name)
 
 
 def aliases_for(name: str, full_name: str = "") -> Set[str]:
@@ -128,6 +176,41 @@ def aliases_for(name: str, full_name: str = "") -> Set[str]:
     raw = str(name or "").strip()
     add(raw)
     add(_readable(raw))
+
+    # The name can carry its own parenthetical: the perturbation set writes a gene with
+    # its locus, "TaHKT1;5-D(Nax2)". No paper prints the glued form, so neither half is
+    # findable unless both are offered separately. The parenthetical is only taken when
+    # it looks like an identifier (a capital or a digit, no spaces) — that keeps "Nax2"
+    # and rejects "q(loss-of-function)", whose inner text is a perturbation descriptor
+    # that would match half the literature.
+    if "(" in raw:
+        add(re.sub(r"\([^)]*\)", " ", raw))
+        for inner in re.findall(r"\(([^)]{2,})\)", raw):
+            inner = inner.strip()
+            if " " not in inner and re.search(r"[A-Z0-9]", inner):
+                add(inner)
+
+    # Transporter-family nomenclature: the literature writes TaHKT1;5-D, but a node id
+    # cannot hold a semicolon so it arrives as TaHKT1_5D. Neither that nor "TaHKT1 5D"
+    # occurs in any paper, so without these variants the field's own foundational
+    # citation reads as ungrounded — Munns 2012 is *about* TaHKT1;5-D and was being
+    # quarantined against its own DOI. The homoeolog suffix is kept in most variants so
+    # TaHKT1;5-D is not confused with TaHKT1;5-B; the bare "stem;number" form is added
+    # too because papers routinely write TaHKT1;5 when the homoeolog is clear from
+    # context.
+    m = _SEMICOLON_GENE.match(raw)
+    if m:
+        stem, num, suffix = m.group(1), m.group(2), m.group(3)
+        stems = {stem}
+        short = _SPECIES_PREFIX.sub("", stem)
+        if len(short) >= 3:
+            stems.add(short)
+        for s in stems:
+            add(f"{s};{num}")
+            if suffix:
+                add(f"{s};{num}-{suffix}")
+                add(f"{s};{num}{suffix}")
+                add(f"{s}-{num}{suffix}")
 
     # Two-letter symbols are real (ER, HA, CA), so the floor is 2 — anything higher
     # silently drops ZmER -> ER and every claim about it looks ungrounded.

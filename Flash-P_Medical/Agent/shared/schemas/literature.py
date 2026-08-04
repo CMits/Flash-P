@@ -28,6 +28,12 @@ class CuratedEdge(SlimModel):
     target: str = Field(alias="t")
     sign: int = Field(alias="x", description="1 = activation, -1 = inhibition")
     doi: DoiStr = Field(default="", alias="d", description="Primary supporting DOI")
+    # Written by Step 1.6, and only when the claim could NOT be grounded ("q"). Absent
+    # means grounded — which is the common case, so the Light file stays lean and the
+    # field's mere presence is the signal the BUILDER acts on. Never hand-edit it.
+    verification: str = Field(
+        default="", alias="v",
+        description="'q' = quarantine: Step 1.6 found no paper stating this claim")
 
 
 class CuratedEdgesMetadata(FlashPMetadata):
@@ -53,6 +59,10 @@ class RawPerturbation(SlimModel):
     expected_direction: Direction = Field(alias="ed")
     species: str = Field(default="", alias="sp")
     doi: DoiStr = Field(default="", alias="d")
+    # See CuratedEdge.verification — same meaning, same "absent = grounded" convention.
+    verification: str = Field(
+        default="", alias="v",
+        description="'q' = quarantine: Step 1.6 found no paper stating this claim")
 
 
 class PerturbationDatasetMetadata(FlashPMetadata):

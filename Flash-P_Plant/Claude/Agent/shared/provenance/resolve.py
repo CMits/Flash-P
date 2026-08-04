@@ -98,6 +98,11 @@ class Config:
     fulltext: bool = True
     fulltext_candidates: int = 2
     offline: bool = False           # cache only — no network at all
+    # Search using each entity's most descriptive name rather than its node id. Wrong
+    # for the first pass (gene symbols are what the literature indexes) but right for a
+    # retry over claims that failed, where the culprit is usually a process node whose
+    # id is not a phrase any paper writes. See Claim.query.
+    descriptive_query: bool = False
 
 
 @dataclass
@@ -312,7 +317,7 @@ def _search_rounds(claim: Claim,
     so it is spent only on the claims the free sources could not settle, and once the
     budget is gone ``litapi`` skips it outright instead of retrying.
     """
-    q = claim.query()
+    q = claim.query(descriptive=cfg.descriptive_query)
     n = cfg.candidates_per_round
     broad = " ".join(x for x in (sentence._readable(claim.entity_a),
                                  sentence._readable(claim.entity_b)) if x)
@@ -394,7 +399,7 @@ def resolve_claim(claim: Claim, doi: str, store: Store,
             res.tried.append(Attempt(source, "search", "miss", f"error: {e}"))
             continue
         res.tried.append(Attempt(source, "search", "hit" if candidates else "miss",
-                                 f"{len(candidates)} candidates for '{claim.query()}'"))
+                                 f"{len(candidates)} candidates for '{query}'"))
 
         for cand in candidates:
             d = bare_doi(cand.get("doi", ""))

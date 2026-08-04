@@ -26,6 +26,7 @@ keys (they appear once per file).
 | `t` | target | curated_edges, network |
 | `x` | sign | curated_edges, network |
 | `d` | doi | all (single provenance field) |
+| `v` | verification | curated_edges, perturbation — written by Step 1.6 **only** when the claim could not be grounded (`"q"`). Absent = grounded. Never hand-edited. |
 | `sp` | species | perturbation |
 | `n` | node | equations, annotations |
 | `ty` | type | network nodes, equations, annotations |
