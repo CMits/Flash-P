@@ -174,7 +174,7 @@ Run all three validators, produce schema-compliant result JSONs, and determine w
 ```json
 {
   "metadata": {
-    "flash_p_version": "1.0",
+    "flash_p_version": "<run: python Agent/shared/flashp_version.py --bare>",
     "phenotype": "Shoot_Branching",
     "species": "Arabidopsis thaliana",
     "created": "2026-04-10"
@@ -223,7 +223,7 @@ Run all three validators, produce schema-compliant result JSONs, and determine w
 ```json
 {
   "metadata": {
-    "flash_p_version": "1.0",
+    "flash_p_version": "<run: python Agent/shared/flashp_version.py --bare>",
     "phenotype": "Shoot_Branching"
   },
   "tests": {

@@ -214,6 +214,10 @@ def audit_network(network_path: Path) -> Dict[str, Any]:
     # Check 4: is_source correctness
     source_mismatches = check_is_source(nodes, edges)
 
+    # Check 6: flash_p_version consistency across every output file in this network
+    # (WARNING-only, non-blocking — see check_version_consistency below)
+    version_report = check_version_consistency(network_path.parent.parent)
+
     return {
         "network_path": str(network_path),
         "total_nodes": len(nodes),
@@ -246,6 +250,42 @@ def audit_network(network_path: Path) -> Dict[str, Any]:
             "phenotype_count": len(phenotype_nodes),
             "passed": len(phenotype_issues) == 0,
         },
+        "check_6_version_consistency": version_report,
+    }
+
+
+def check_version_consistency(network_dir: Path) -> Dict[str, Any]:
+    """WARNING-only, non-blocking: every output JSON's metadata.flash_p_version in this
+    network folder should agree. A network re-touched across pipeline versions can
+    legitimately span two values, but when it does, someone should look — this is the
+    drift already observed in practice (e.g. pipeline_manifest.json stuck at an older
+    value while network/network.json had moved on). Deliberately excluded from the
+    blocking pass/fail checks 1-5 and from --fix; version drift needs a human decision,
+    not an auto-repair, and shouldn't fail CI-style exit-code use of this script.
+    """
+    # Guard: only scan real Flash-P network folders (identified by a network/ or data/
+    # subdir). Without this, a shallow/synthetic path (e.g. from _self_test's tempdir,
+    # which is only one level deep) would resolve network_dir one level too high and
+    # rglob an unrelated directory tree.
+    if not (network_dir / "network").is_dir() and not (network_dir / "data").is_dir():
+        return {"distinct_versions": [], "by_version": {}, "passed": True}
+
+    seen: Dict[str, List[str]] = {}
+    for jf in sorted(network_dir.rglob("*.json")):
+        try:
+            d = json.loads(jf.read_text(encoding="utf-8"))
+        except Exception:
+            continue  # not JSON (e.g. TOON-format tabular data saved with a .json extension)
+        if not isinstance(d, dict):
+            continue  # e.g. steady-state dumps, which are top-level JSON arrays
+        meta = d.get("metadata")
+        v = meta.get("flash_p_version") if isinstance(meta, dict) else None
+        if v:
+            seen.setdefault(v, []).append(str(jf.relative_to(network_dir)))
+    return {
+        "distinct_versions": sorted(seen),
+        "by_version": seen,
+        "passed": len(seen) <= 1,
     }
 
 
@@ -417,6 +457,22 @@ def render_report(report: Dict, fix_mode: bool = False) -> str:
         for issue in c5["issues"]:
             lines.append(f"  ISSUE: {issue}")
         lines.append("  -> NOT auto-fixable (needs manual metadata correction)")
+
+    # Check 6 (advisory only — not part of the [N/5] pass/fail scoring or exit code)
+    c6 = report["check_6_version_consistency"]
+    lines.append("")
+    lines.append("[advisory] flash_p_version consistency across this network's output files")
+    if c6["passed"]:
+        v = c6["distinct_versions"][0] if c6["distinct_versions"] else "(none found)"
+        lines.append(f"  OK - every output file agrees: {v}")
+    else:
+        lines.append(f"  WARNING: {len(c6['distinct_versions'])} distinct versions found "
+                     f"across this network's output files")
+        for v in c6["distinct_versions"]:
+            files = c6["by_version"][v]
+            lines.append(f"    - {v!r}: {len(files)} file(s), e.g. {files[0]}")
+        lines.append("  -> not auto-fixable and not counted in the pass/fail result below; "
+                     "re-run the step(s) that wrote the stale file(s) to refresh them")
 
     # Summary
     passed = sum(1 for k in ("check_1_connectivity", "check_2_doi",

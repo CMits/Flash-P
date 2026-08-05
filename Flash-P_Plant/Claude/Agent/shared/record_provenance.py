@@ -19,6 +19,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from schemas.provenance import FileRecord, PipelineManifest, StepRecord
 from schemas.common import FlashPMetadata
+from flashp_version import get_version
 
 STEP_NAMES = {
     1: "Literature Review",
@@ -118,7 +119,7 @@ def record_step(net_dir, step, model="unknown"):
 
         manifest = PipelineManifest(
             metadata=FlashPMetadata(
-                flash_p_version="1.0",
+                flash_p_version=get_version(),
                 phenotype=phenotype,
                 species=species,
                 created=now[:10],
@@ -156,7 +157,7 @@ def record_step(net_dir, step, model="unknown"):
         started=now,
         completed=now,
         model=model,
-        flash_p_version="1.0",
+        flash_p_version=get_version(),
         inputs=inputs,
         outputs=outputs,
     )

@@ -100,7 +100,7 @@ class ReconciliationType(LexEnum):
 class FlashPMetadata(BaseModel):
     """Metadata block present in every pipeline output file (readable keys)."""
     model_config = ConfigDict(extra="ignore")
-    flash_p_version: str = "light-1.0-debiasing"
+    flash_p_version: str = ""        # git-tag-derived — see Agent/shared/flashp_version.get_version()
     build_variant: str = ""          # e.g. "debiasing" — which spec variant produced this file
     phenotype: str = ""
     species: str = ""

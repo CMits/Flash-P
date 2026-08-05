@@ -33,7 +33,7 @@ import webbrowser
 from pathlib import Path
 
 import light_io
-from flashp_version import get_version
+from flashp_version import get_version, get_version_info
 
 # Reuse the visualiser's plumbing (payload build, library inlining, style load).
 import network_to_visual as viz
@@ -166,8 +166,12 @@ def _script(path: Path) -> str:
 def write_studio(networks: list, out_html: Path) -> bool:
     template = TEMPLATE_FILE.read_text(encoding="utf-8")
     style = json.loads(viz.STYLE_FILE.read_text(encoding="utf-8"))
+    vinfo = get_version_info()
     payload = {
         "generated": datetime.date.today().isoformat(),
+        "pipeline_version": vinfo["flash_p_version"],
+        "pipeline_commit": vinfo.get("git_commit", ""),
+        "pipeline_is_release": vinfo.get("is_release", False),
         "style": style,
         "networks": networks,
     }

@@ -603,7 +603,8 @@
     function renderBrowse() {
       document.getElementById('browse-sub').textContent =
         NETWORKS.length + ' network' + (NETWORKS.length === 1 ? '' : 's') +
-        ' embedded · generated ' + (DATA.generated || '');
+        ' embedded · generated ' + (DATA.generated || '') +
+        (DATA.pipeline_version ? ' · Flash-P v' + DATA.pipeline_version : '');
       var bar = document.getElementById('browse-filter');
       if (!NETWORKS.length) { bar.innerHTML = ''; renderCards(); return; }
       var speciesSet = {};
@@ -669,6 +670,7 @@
           '</div>' +
           '<div class="card-stats"><span><i class="dot blue"></i>' + net.nNodes + ' nodes</span>' +
           '<span><i class="dot green"></i>' + net.nEdges + ' edges</span>' +
+          (net.version ? '<span class="chip">v' + esc(net.version) + '</span>' : '') +
           '<button class="card-sim">Simulate &rarr;</button></div>' +
           '<div class="card-hint">Click to explore &rarr;</div>' +
           '</div></div>'

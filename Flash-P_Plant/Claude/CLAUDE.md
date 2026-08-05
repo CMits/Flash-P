@@ -124,12 +124,15 @@ Critical field rules (list of common violations): `PIPELINE_REFERENCE.md` → *S
 
 ## JSON Metadata
 ```json
-"metadata": {"flash_p_version": "light-1.0-debiasing", "build_variant": "debiasing", "phenotype": "...", "species": "...", "created": "YYYY-MM-DD"}
+"metadata": {"flash_p_version": "<run: python Agent/shared/flashp_version.py --bare>", "build_variant": "debiasing", "phenotype": "...", "species": "...", "created": "YYYY-MM-DD"}
 ```
-**Build-variant tag (MANDATORY this build).** EVERY metadata block in EVERY output file MUST set
-`"flash_p_version": "light-1.0-debiasing"` and include `"build_variant": "debiasing"`. This **overrides**
-the `"1.0"` / `"light-1.0"` literals shown in the per-agent `*_AGENT.md` example JSON — use the tagged
-values so the generated network self-documents that it came from the de-biasing variant of the specs.
+**Never hand-type `flash_p_version`.** It is git-tag-derived, not a fixed literal — before writing
+any metadata block by hand, run `python Agent/shared/flashp_version.py --bare` and paste its exact
+output. Every pipeline script does this automatically via `flashp_version.get_version()`; when
+writing JSON directly (as a subagent following this spec) run the same command yourself. Any
+`"1.0"` / `"light-1.0-debiasing"` literal shown in an older per-agent `*_AGENT.md` example is
+stale — ignore it and use the live command's output instead. `build_variant` remains a separate,
+hand-set concept (currently `"debiasing"` for this build) — unrelated to the version number.
 
 ## Error Handling
 | Situation | Action |
