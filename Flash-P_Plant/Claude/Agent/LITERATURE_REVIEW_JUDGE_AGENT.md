@@ -218,7 +218,7 @@ gap audit in your head but skip the audit-narrative fields:
 ```json
 {
   "metadata": {
-    "flash_p_version": "light-1.0-debiasing", "build_variant": "debiasing",
+    "flash_p_version": "<run: python Agent/shared/flashp_version.py --bare>", "build_variant": "debiasing",
     "phenotype": "hypocotyl_length",
     "phenotype_node": "Hypocotyl_Length",
     "species": "Arabidopsis thaliana",

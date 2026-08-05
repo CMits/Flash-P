@@ -160,7 +160,7 @@ A validation hook checks every JSON file you write. Files that don't match the s
 ```json
 {
   "metadata": {
-    "flash_p_version": "light-1.0-debiasing", "build_variant": "debiasing",
+    "flash_p_version": "<run: python Agent/shared/flashp_version.py --bare>", "build_variant": "debiasing",
     "phenotype": "flowering_time",
     "species": "Arabidopsis thaliana",
     "created": "2026-04-14",
@@ -199,7 +199,7 @@ A validation hook checks every JSON file you write. Files that don't match the s
 ```json
 {
   "metadata": {
-    "flash_p_version": "light-1.0-debiasing", "build_variant": "debiasing",
+    "flash_p_version": "<run: python Agent/shared/flashp_version.py --bare>", "build_variant": "debiasing",
     "phenotype": "shoot_branching",
     "species": "Arabidopsis thaliana",
     "created": "2026-04-14",

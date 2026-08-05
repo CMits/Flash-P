@@ -336,6 +336,166 @@
     .evtable .cl { font-family: ui-monospace, Menlo, Consolas, monospace; white-space: nowrap; }
     .evtable .qt { color: var(--muted); }
     .ev-empty { border: 1px dashed var(--border); border-radius: 11px; padding: 30px; text-align: center; color: var(--muted); }
+    /* the Visual Propagation view fills the main area like the other views */
+    #view-prop.show { display: flex; }
+    .prop-host { flex: 1; min-height: 0; display: flex; padding: 12px; }
+    .propcta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+    .propcta .crumb { font-size: 11.5px; }
+    /* the no-run-yet state sits in the middle rather than stretching the whole pane */
+    .prop-host > .empty { margin: auto; align-self: center; max-width: 560px; padding: 28px 32px; }
+    /* ---- Visual Propagation ------------------------------------------------ */
+    .prop-root { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
+    .prop-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .prop-title { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+    .prop-title strong { font-size: 15px; }
+    .prop-sub { font-size: 12px; color: var(--muted); }
+    .prop-toggles { margin-left: auto; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+    .prop-check { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--fg); cursor: pointer; }
+    .prop-check input { accent-color: var(--primary); }
+
+    /* The stage is the whole body of the view: canvas on the left, one scrolling sidebar on
+       the right. The sidebar scrolls internally so narration growing never resizes the canvas. */
+    .prop-stage { flex: 1 1 auto; min-height: 0; display: flex; gap: 0; }
+    .prop-canvaspane { flex: 1; min-width: 0; min-height: 0; display: flex; }
+    .prop-canvas { position: relative; flex: 1; min-width: 0; min-height: 0;
+      border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--card); }
+    .prop-svg { width: 100%; height: 100%; display: block; touch-action: none; }
+    .prop-node { cursor: pointer; outline: none; }
+    .prop-node:focus-visible rect:first-child { display: block !important; }
+
+    .prop-zoom { position: absolute; right: 10px; top: 10px; display: flex; flex-direction: column;
+      gap: 3px; padding: 4px; border: 1px solid var(--border); border-radius: 9px;
+      background: var(--card); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .prop-zoombtn { width: 26px; height: 26px; display: flex; align-items: center; justify-content: center;
+      border: 0; background: transparent; color: var(--fg); border-radius: 6px; cursor: pointer;
+      font-size: 14px; line-height: 1; }
+    .prop-zoombtn:hover { background: var(--secondary); }
+    .prop-hint { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
+      pointer-events: none; border: 1px solid var(--border); border-radius: 999px;
+      background: var(--card); padding: 3px 11px; font-size: 11px; color: var(--muted); }
+
+    .prop-divider { flex: 0 0 9px; cursor: col-resize; position: relative; border: 0;
+      background: transparent; align-self: stretch; }
+    .prop-divider::after { content: ''; position: absolute; left: 50%; top: 8px; bottom: 8px;
+      width: 2px; transform: translateX(-50%); border-radius: 2px; background: var(--border); }
+    .prop-divider:hover::after, .prop-divider.on::after, .prop-divider:focus-visible::after { background: var(--primary); }
+    .prop-divider:focus-visible { outline: none; }
+    /* Everything that is not the canvas lives in one scrolling column on the right, so the
+       transport sits beside the network it drives instead of spanning the full width. */
+    .prop-side { flex: 0 0 38%; min-width: 280px; min-height: 0; display: flex;
+      flex-direction: column; gap: 8px; overflow-y: auto; overscroll-behavior: contain;
+      padding-right: 2px; }
+    .prop-chartpane { flex: 0 0 290px; min-width: 0; min-height: 200px; display: flex; }
+
+    .prop-chart { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column;
+      border: 1px solid var(--border); border-radius: 10px; background: var(--card); padding: 10px; }
+    .prop-charthead { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 5px; }
+    .prop-charthead h3 { margin: 0; font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .04em; color: var(--muted); }
+    .prop-modes { margin-left: auto; display: flex; gap: 4px; }
+    .prop-chartlegend { display: flex; flex-wrap: wrap; gap: 2px 9px; margin-bottom: 4px; }
+    .prop-chip { display: inline-flex; align-items: center; gap: 4px; border: 0; background: none;
+      padding: 0 2px; font-size: 10.5px; color: var(--fg); cursor: pointer; }
+    .prop-chip.dim { opacity: .45; }
+    .prop-chipsw { width: 14px; height: 3px; border-radius: 999px; flex: none; }
+    .prop-chipname { font-family: ui-monospace, Menlo, Consolas, monospace; }
+    .prop-chipname.on { font-weight: 700; }
+    .prop-plot { flex: 1; min-height: 90px; }
+    .prop-plotsvg { display: block; }
+    .prop-plotempty { height: 100%; display: flex; align-items: center; justify-content: center;
+      text-align: center; font-size: 12px; color: var(--muted); }
+
+    .prop-panel { flex: 0 0 auto; display: flex; flex-direction: column; gap: 8px; }
+
+    .prop-card { border: 1px solid var(--border); border-radius: 10px; background: var(--card); padding: 10px; }
+    .prop-cardhead { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+    .prop-cardhead h3 { margin: 0; font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .04em; color: var(--muted); }
+    .prop-info { font-size: 11px; color: var(--muted); cursor: help; }
+    .prop-caption { margin: 0; font-size: 13px; line-height: 1.5; }
+    .prop-subnote { margin: 8px 0 0; border-radius: 7px; background: var(--secondary);
+      padding: 7px; font-size: 11.5px; line-height: 1.5; color: var(--muted); }
+    .prop-warn { margin: 8px 0 0; border-radius: 7px; padding: 7px; font-size: 11.5px;
+      line-height: 1.5; background: rgba(217,147,11,.12); color: #8a5a00; }
+    html.dark .prop-warn { color: #fbbf24; }
+    .prop-link { border: 0; background: none; color: var(--primary); font-size: 11px;
+      font-weight: 600; cursor: pointer; margin-left: auto; }
+    .prop-link:hover { text-decoration: underline; }
+    .prop-movers { display: flex; flex-direction: column; gap: 8px; }
+    .prop-empty { margin: 0; font-size: 12.5px; color: var(--muted); }
+    .prop-mover { border: 1px solid var(--border); border-radius: 8px; padding: 8px; }
+    .prop-moverhead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; margin-bottom: 5px; }
+    .prop-movername { border: 0; background: none; padding: 0; cursor: pointer;
+      font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; font-weight: 700; color: var(--fg); }
+    .prop-movername:hover { color: var(--primary); text-decoration: underline; }
+    .prop-moverdelta { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px;
+      color: var(--muted); font-variant-numeric: tabular-nums; }
+    .prop-moverto { font-weight: 700; }
+    .prop-sourcenote { margin: 0; font-size: 11.5px; line-height: 1.5; color: var(--muted); }
+    .prop-sourcenote code { font-family: ui-monospace, Menlo, Consolas, monospace; }
+    .prop-arith { display: flex; flex-direction: column; gap: 1px;
+      font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px; line-height: 1.5; }
+    .prop-arithrow { display: flex; gap: 8px; }
+    .prop-arithlabel { width: 74px; flex: none; color: var(--muted); }
+    .prop-arithval { flex: 1; min-width: 0; word-break: break-word; }
+    .prop-formula { margin-top: 7px; }
+    .prop-formula summary { cursor: pointer; font-size: 11px; color: var(--muted); }
+    .prop-formula summary:hover { color: var(--fg); }
+    .prop-formula code { display: block; margin-top: 4px; border-radius: 5px; background: var(--secondary);
+      padding: 6px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 10.5px;
+      line-height: 1.5; word-break: break-all; }
+
+    .prop-legend { border: 1px solid var(--border); border-radius: 10px; background: var(--card); padding: 7px 11px; }
+    .prop-legend-row { display: flex; align-items: center; gap: 12px; }
+    .prop-legend-main { flex: 1; min-width: 0; }
+    .prop-legend-bar { height: 10px; width: 100%; border: 1px solid var(--border); border-radius: 3px; }
+    .prop-legend-ticks { margin-top: 2px; display: flex; justify-content: space-between;
+      font-size: 9.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+    .prop-legend-size { display: flex; align-items: flex-end; gap: 4px;
+      border-left: 1px solid var(--border); padding-left: 12px; flex: none; }
+    .prop-legend-swatch { display: inline-block; border: 1px solid var(--border);
+      background: var(--secondary); border-radius: 2px; }
+    .prop-legend-sizelabel { margin-left: 2px; font-size: 9.5px; color: var(--muted); }
+    .prop-legend-cap { margin: 4px 0 0; font-size: 10.5px; line-height: 1.35; color: var(--muted); }
+
+    .prop-controls { border: 1px solid var(--border); border-radius: 10px; background: var(--card); padding: 11px; }
+    .prop-phase { margin-bottom: 9px; border-radius: 7px; padding: 5px 9px; font-size: 11.5px; font-weight: 600; }
+    .prop-phase-wave { background: color-mix(in srgb, var(--primary) 12%, transparent); color: var(--primary); }
+    .prop-phase-relax { background: var(--secondary); color: var(--muted); }
+    .prop-phase-steady { background: var(--secondary); color: var(--fg); }
+
+    .prop-btnrow { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+    .prop-iconbtn { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;
+      border: 1px solid var(--border); background: transparent; color: var(--fg);
+      border-radius: 7px; cursor: pointer; font-size: 13px; line-height: 1; }
+    .prop-iconbtn:hover:not(:disabled) { background: var(--secondary); }
+    .prop-iconbtn:disabled { opacity: .4; cursor: default; }
+    .prop-next { display: flex; align-items: center; gap: 5px; height: 30px; padding: 0 13px;
+      border: 0; border-radius: 7px; background: var(--primary); color: var(--primary-fg);
+      font-size: 13px; font-weight: 700; cursor: pointer; }
+    .prop-next:hover:not(:disabled) { opacity: .9; }
+    .prop-next:disabled { opacity: .4; cursor: default; }
+    .prop-next-chev { font-size: 15px; line-height: 1; }
+
+    .prop-speed { margin-left: auto; display: flex; align-items: center; gap: 4px; font-size: 11px; }
+    .prop-speed-label { color: var(--muted); }
+    .prop-pill { border: 1px solid var(--border); background: transparent; color: var(--fg);
+      border-radius: 999px; padding: 2px 9px; font-size: 11px; font-weight: 600; cursor: pointer; }
+    .prop-pill.on { border-color: var(--primary); background: var(--primary); color: var(--primary-fg); }
+
+    .prop-scrubwrap { margin-top: 11px; }
+    .prop-scrub { width: 100%; height: 6px; cursor: pointer; accent-color: var(--primary); }
+    .prop-readout { margin-top: 5px; display: flex; justify-content: space-between;
+      gap: 12px; flex-wrap: wrap; font-size: 11px; color: var(--muted); }
+    .prop-steptext { font-weight: 600; color: var(--fg); }
+    .prop-itertext { font-variant-numeric: tabular-nums; }
+    .prop-note { margin: 8px 0 0; border-top: 1px solid var(--border); padding-top: 8px;
+      font-size: 11px; line-height: 1.5; color: var(--muted); }
+    .prop-live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .prop-root * { animation: none !important; transition: none !important; }
+    }
   </style>
   <!--FLASHP_LIBS-->
 </head>
@@ -349,6 +509,7 @@
       <button class="btn" id="nav-view" style="display:none">View</button>
       <button class="btn" id="nav-evidence" style="display:none">Evidence</button>
       <button class="btn" id="nav-sim" style="display:none">Simulate</button>
+      <button class="btn" id="nav-prop" style="display:none" title="Watch the perturbation propagate">Visual Propagation</button>
       <button class="btn" id="nav-theme" title="Toggle dark mode">&#9680;</button>
     </div>
   </div>
@@ -422,6 +583,11 @@
         <main class="pane results" id="sim-results"></main>
       </div>
     </section>
+
+    <!-- VISUAL PROPAGATION -->
+    <section id="view-prop" class="view">
+      <div class="prop-host" id="prop-host"></div>
+    </section>
   </main>
 
   <!-- Evidence drawer: lives outside <main> so it overlays every view. -->
@@ -438,6 +604,8 @@
   <!--FLASHP_GRAPH_JS-->
   <!--FLASHP_SIM_JS-->
   <!--FLASHP_CHART_JS-->
+  <!--FLASHP_PROP_CORE_JS-->
+  <!--FLASHP_PROP_VIEW_JS-->
   <script>
   (function () {
     'use strict';
@@ -707,15 +875,19 @@
 
     // ---- view switching ----
     var curSlug = null;
-    var viewApp = null, simApp = null;
+    var viewApp = null, simApp = null, propApp = null;
 
     function destroyApps() {
       if (viewApp && viewApp.cy) { try { viewApp.cy.destroy(); } catch (e) {} viewApp = null; }
       if (simApp && simApp.cy) { try { simApp.cy.destroy(); } catch (e) {} simApp = null; }
+      destroyProp();
+    }
+    function destroyProp() {
+      if (propApp) { try { propApp.destroy(); } catch (e) {} propApp = null; }
     }
     function setView(name) {
       document.body.setAttribute('data-view', name);
-      ['browse', 'view', 'evidence', 'sim'].forEach(function (v) {
+      ['browse', 'view', 'evidence', 'sim', 'prop'].forEach(function (v) {
         document.getElementById('view-' + v).classList.toggle('show', v === name);
       });
       document.getElementById('nav-view').style.display = curSlug ? '' : 'none';
@@ -724,6 +896,10 @@
       // tab would read as "no evidence exists" rather than "not checked yet".
       document.getElementById('nav-evidence').style.display =
         (curSlug && hasEvidence(bySlug[curSlug])) ? '' : 'none';
+      // Propagation is shown alongside View/Simulate as soon as a network is open. It needs a
+      // run to replay, but hiding the tab until one exists made the whole feature undiscoverable
+      // — so it is always offered and explains itself when there is nothing to show yet.
+      document.getElementById('nav-prop').style.display = curSlug ? '' : 'none';
       document.getElementById('crumb').textContent = curSlug ? '· ' + bySlug[curSlug].name : '';
     }
 
@@ -731,10 +907,12 @@
     document.getElementById('nav-view').onclick = function () { if (curSlug) openView(curSlug); };
     document.getElementById('nav-evidence').onclick = function () { if (curSlug) openEvidence(curSlug); };
     document.getElementById('nav-sim').onclick = function () { if (curSlug) openSim(curSlug); };
+    document.getElementById('nav-prop').onclick = function () { openProp(); };
     document.getElementById('nav-theme').onclick = function () {
       var dark = document.documentElement.classList.toggle('dark');
       if (viewApp) viewApp.setTheme(dark);
       if (simApp) simApp.setTheme(dark);
+      if (propApp) propApp.setTheme(dark);
       if (simState.result) renderResults();
     };
 
@@ -785,7 +963,8 @@
     function renderBrowse() {
       document.getElementById('browse-sub').textContent =
         NETWORKS.length + ' network' + (NETWORKS.length === 1 ? '' : 's') +
-        ' embedded · generated ' + (DATA.generated || '');
+        ' embedded · generated ' + (DATA.generated || '') +
+        (DATA.pipeline_version ? ' · Flash-P v' + DATA.pipeline_version : '');
       var bar = document.getElementById('browse-filter');
       if (!NETWORKS.length) { bar.innerHTML = ''; renderCards(); return; }
       var speciesSet = {};
@@ -851,6 +1030,7 @@
           '</div>' +
           '<div class="card-stats"><span><i class="dot blue"></i>' + net.nNodes + ' nodes</span>' +
           '<span><i class="dot green"></i>' + net.nEdges + ' edges</span>' +
+          (net.version ? '<span class="chip">v' + esc(net.version) + '</span>' : '') +
           '<button class="card-sim">Simulate &rarr;</button></div>' +
           '<div class="card-hint">Click to explore &rarr;</div>' +
           '</div></div>'
@@ -1401,6 +1581,8 @@
         baselineLabel: baselineLabel, params: net.params,
       });
       simState.result = res;
+      // Kept so the Visual Propagation view can replay this exact run without re-solving.
+      simState.perturbation = { geneModifiers: geneModifiers, exogenous: exogenous };
       simState.testLabel = describe(simState.genes, simState.treatments);
       var final = res.iterations[res.iterations.length - 1].values || {};
       simState.outcome = (simState.outcome && final[simState.outcome] != null) ? simState.outcome : (res.phenotype || '');
@@ -1412,6 +1594,51 @@
       movers.forEach(function (m) { seed[m] = true; });
       simState.selected = Object.keys(seed).slice(0, 8);
       renderResults();
+    }
+
+    // ---- visual propagation ----
+
+    /*
+     * Replays the run that is already in simState — the solver is never re-run, so the
+     * animation cannot disagree with the table and chart beside it. The whole network is
+     * laid out with ELK on entry, which is why this is async.
+     */
+    function openProp() {
+      destroyProp();
+      var host = document.getElementById('prop-host');
+      if (!simState.result) {
+        // Nothing to replay yet. Say so, and offer the one action that fixes it.
+        setView('prop');
+        host.innerHTML = '<div class="empty" style="margin:auto;">' +
+          '<div style="font-size:30px;opacity:.5;">&#9654;</div>' +
+          '<p style="color:var(--fg);font-weight:600;margin:8px 0 2px;">Run a simulation first.</p>' +
+          '<p style="max-width:380px;font-size:13px;">This view replays a perturbation you have ' +
+          'already run — stepping through the solver iterations so you can watch the signal ' +
+          'travel across the network. Design a knockout or treatment in <b>Simulate</b>, hit ' +
+          '<b>Run simulation</b>, then come back.</p>' +
+          '<button class="btn primary" id="prop-tosim" style="margin-top:12px;">Go to Simulate</button></div>';
+        var go = document.getElementById('prop-tosim');
+        if (go) go.onclick = function () { if (curSlug) openSim(curSlug); };
+        return;
+      }
+      host.innerHTML = '<div class="empty" style="margin:auto;">Laying out the network…</div>';
+      setView('prop');
+      var net = simState.net;
+      window.FLASHPPROPVIEW.open(host, {
+        network: net,
+        result: simState.result,
+        method: simState.result.method,
+        perturbation: simState.perturbation || { geneModifiers: {}, exogenous: {} },
+        style: STYLE,
+        dark: document.documentElement.classList.contains('dark'),
+      }).then(function (app) {
+        host.querySelectorAll('.empty').forEach(function (e) { e.remove(); });
+        propApp = app;
+      }, function (err) {
+        host.innerHTML = '<div class="empty" style="margin:auto;">' +
+          '<p style="color:var(--fg);font-weight:600;">Could not build the propagation view.</p>' +
+          '<p style="font-size:13px;">' + esc(String(err && err.message || err)) + '</p></div>';
+      });
     }
 
     // ---- results ----
@@ -1434,6 +1661,8 @@
 
       host.innerHTML = '<div class="inner">' +
         summaryHtml(res, mode) +
+        '<div class="propcta"><button class="btn primary" id="sim-toprop">&#9654; Watch propagation</button>' +
+        '<span class="crumb">step through this run and watch the signal travel</span></div>' +
         (!rwr ? '<div class="ymodes"><span class="uplabel" style="font-weight:400;">Y-axis' + info(TIPS.yaxis) + '</span>' +
           modes.map(function (m) { return '<span class="pill' + (mode === m.k ? ' active' : '') + '" data-y="' + m.k + '">' + m.l + '</span>'; }).join('') + '</div>' : '') +
         '<div class="block"><h3>' + chartTitle(res, mode) + '</h3><div id="sim-chart"></div></div>' +
@@ -1444,6 +1673,10 @@
         '<div class="scroll" id="sim-tbody"></div></div></div>' +
         '</div>';
 
+      // Re-bound on every render: renderResults() rebuilds this panel wholesale on each
+      // mode change, table click, theme toggle and resize.
+      var propBtn = host.querySelector('#sim-toprop');
+      if (propBtn) propBtn.onclick = openProp;
       // outcome select
       var osel = host.querySelector('#sim-outcome');
       if (osel) osel.onchange = function () { simState.outcome = osel.value; if (simState.selected.indexOf(osel.value) < 0) simState.selected.push(osel.value); renderResults(); };

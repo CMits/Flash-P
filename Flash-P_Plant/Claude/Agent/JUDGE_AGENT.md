@@ -172,7 +172,7 @@ Conform to the schema in §8. Validate by re-reading the file before declaring c
 ```json
 {
   "metadata": {
-    "flash_p_version": "1.0",
+    "flash_p_version": "<run: python Agent/shared/flashp_version.py --bare>",
     "phenotype": "shoot_branching",
     "phenotype_node": "Shoot_Branching",
     "species": "Arabidopsis thaliana",

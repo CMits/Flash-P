@@ -242,7 +242,7 @@ Do this manually, THEN run the script as a second check:
 ```json
 {
   "metadata": {
-    "flash_p_version": "light-1.0-debiasing",
+    "flash_p_version": "<run: python Agent/shared/flashp_version.py --bare>",
     "build_variant": "debiasing",
     "phenotype": "shoot_branching",
     "species": "Oryza sativa",
@@ -364,7 +364,7 @@ Do this manually, THEN run the script as a second check:
 ```json
 {
   "metadata": {
-    "flash_p_version": "light-1.0-debiasing",
+    "flash_p_version": "<run: python Agent/shared/flashp_version.py --bare>",
     "build_variant": "debiasing",
     "phenotype": "shoot_branching",
     "species": "Oryza sativa",
@@ -504,7 +504,7 @@ Both equations produce WT baseline = 1.0 for all nodes when all inputs = 1.0.
 | `edge_id` | `"N001"`, `"N002"`, ... | `NetworkEdge.edge_id` | Non-sequential or missing IDs |
 | `effect` | `"activation"`, `"inhibition"`, `"repression"` | `EdgeEffect` enum | Using `"positive"` / `"negative"` |
 | `formula` | Human-readable equation string | `AlgebraicEquation.formula` | Omitting the field entirely |
-| `flash_p_version` | `"1.0"` | `FlashPMetadata` | Using `"1.0"` or `"1.0"` |
+| `flash_p_version` | output of `python Agent/shared/flashp_version.py --bare` | `FlashPMetadata` | Hand-typing a fixed literal like `"1.0"` |
 | `evidence` | List of flat `EvidenceEntry` objects | `NetworkEdge.evidence` | Nested `{source: {doi: ...}}` structure |
 
 ## 9.1 Node Naming Conventions
@@ -1196,7 +1196,7 @@ Do NOT aim for a specific node or edge count. Instead, build the best quality CA
 - [ ] `network.json` passes `NetworkFile` schema validation
 - [ ] `algebraic_equations.json` passes `AlgebraicEquationsFile` schema validation
 - [ ] `ode_equations.json` passes `ODEEquationsFile` schema validation (default K=1.0, n=2)
-- [ ] `flash_p_version: "1.0"` in all metadata blocks
+- [ ] `flash_p_version` matches the live output of `python Agent/shared/flashp_version.py --bare` in all metadata blocks
 
 ## 18. Handoff
 
