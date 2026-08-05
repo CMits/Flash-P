@@ -209,6 +209,20 @@
       onSelectEdge(null);
     }
 
+    // Find-by-id entry point for the View tab's search box: reuses selectNode's fade/.hl
+    // highlight + onSelect(...) inspector callback (so a searched node looks and behaves
+    // exactly like a clicked one), and additionally pans/zooms the viewport to it.
+    function focusNode(id) {
+      var node = cy.getElementById(id);
+      if (node.empty() || !node.isNode()) return false;
+      selectNode(node);
+      cy.animate(
+        { center: { eles: node }, zoom: Math.min(Math.max(cy.zoom(), 1), 2.2) },
+        { duration: 400 }
+      );
+      return true;
+    }
+
     // ---- edge routing helpers (ported from network.js / NetworkGraph.tsx) ----
     function applyEdgeRouting(mode) {
       cy.edges().removeStyle('segment-weights segment-distances segment-radii');
@@ -225,14 +239,24 @@
       }
     }
 
-    // Fan parallel taxi edges across a node face so they don't stack on the centre.
+    // Fan parallel taxi edges across a node face so they don't stack on the centre, AND
+    // stagger each edge's taxi-turn point so edges spanning the same rank-gap don't run
+    // merged on top of each other along their whole middle stretch (a uniform taxi-turn
+    // fans endpoints but leaves the long straight run between them identical for every
+    // edge sharing that corridor — this is what "endpoint fanning without middle-segment
+    // fanning" looks like, and why parallel edges only visually separate near their ends).
     function fanEndpoints(mode) {
       var vert = mode === 'taxi-v';
       if (!vert && mode !== 'taxi-h') {
-        cy.edges().removeStyle('source-endpoint target-endpoint');
+        cy.edges().removeStyle('source-endpoint target-endpoint taxi-turn');
         return;
       }
-      var SPREAD = 90;
+      var SPREAD = 90, TURN_MIN = 30, TURN_MAX = 62;
+      // taxi-turn is a single scalar per edge (unlike source/target-endpoint, which are
+      // distinct properties) — an edge is visited once as an outgoer of its source node
+      // and once as an incomer of its target node, so both passes racing to set it would
+      // silently clobber each other. First writer wins; deterministic-per-run, not a bug.
+      var turned = {};
       var assign = function (edges, which, faceSign, otherPos) {
         var arr = edges.toArray();
         if (!arr.length) return;
@@ -244,6 +268,11 @@
             which + '-endpoint',
             vert ? off + '% ' + faceSign * 50 + '%' : faceSign * 50 + '% ' + off + '%'
           );
+          if (!turned[e.id()]) {
+            var turn = n === 1 ? 45 : TURN_MIN + (i / (n - 1)) * (TURN_MAX - TURN_MIN);
+            e.style('taxi-turn', turn.toFixed(0) + '%');
+            turned[e.id()] = true;
+          }
         });
       };
       cy.nodes().forEach(function (node) {
@@ -261,19 +290,24 @@
       try { onReady(cy); } catch (e) {}
     }
 
+    // Layout keys backed by ELK (whole-graph placement + genuine per-edge orthogonal
+    // routing, computed together in one pass — see runElkLayered) vs. keys backed by
+    // Cytoscape's own layout algorithms + taxi-style edge routing (see layoutOpts below).
+    var ELK_DIRECTION = { elk: 'DOWN', dagreTB: 'DOWN', dagreLR: 'RIGHT' };
+    var DAGRE_FALLBACK_RANKDIR = { elk: 'TB', dagreTB: 'TB', dagreLR: 'LR' };
+
     function applyLayout(key) {
       currentLayout = key;
-      if (key === 'elk') {
-        runElkOrthogonal().then(settle).catch(function (e) {
-          if (global.console) console.warn('ELK orthogonal failed; falling back to layered taxi.', e);
-          applyLayout('dagreTB');
+      if (ELK_DIRECTION[key]) {
+        var rankDir = DAGRE_FALLBACK_RANKDIR[key];
+        runElkLayered(ELK_DIRECTION[key]).then(settle).catch(function (e) {
+          if (global.console) console.warn("ELK layered ('" + key + "') failed; falling back to dagre+taxi.", e);
+          runDagreTaxiFallback(rankDir);
         });
         return;
       }
 
       var layoutOpts = {
-        dagreTB: { edge: 'taxi-v', opts: function () { return { name: 'dagre', rankDir: 'TB', nodeSep: 26, edgeSep: 12, rankSep: 60, animate: false, padding: 40, ranker: 'network-simplex' }; } },
-        dagreLR: { edge: 'taxi-h', opts: function () { return { name: 'dagre', rankDir: 'LR', nodeSep: 22, edgeSep: 10, rankSep: 75, animate: false, padding: 40, ranker: 'network-simplex' }; } },
         breadthfirst: { edge: 'taxi-v', opts: function () { return { name: 'breadthfirst', directed: true, animate: false, padding: 40, spacingFactor: 1.15, roots: cy.nodes('[?src]') }; } },
         fcose: { edge: 'bezier', opts: function () { return { name: 'fcose', quality: 'proof', animate: false, randomize: true, padding: 40, nodeRepulsion: 5500, idealEdgeLength: 75, nodeSeparation: 80, gravity: 0.25, numIter: 2500 }; } },
         cose: { edge: 'bezier', opts: function () { return { name: 'cose', animate: false, padding: 40, nodeRepulsion: 9000, idealEdgeLength: 70, edgeElasticity: 120, gravity: 0.3, numIter: 1200, nodeOverlap: 14 }; } },
@@ -298,21 +332,47 @@
       }
     }
 
-    // True per-edge orthogonal routing via ELK, rendered as Cytoscape `segments`.
-    function runElkOrthogonal() {
+    // Dagre node placement + taxi edge routing — the pre-ELK behaviour for the
+    // Layered ↓/→ layouts, kept only as the fallback if ELK itself throws (e.g. elkjs
+    // failed to load). Not reachable from the layout dropdown under normal operation.
+    function runDagreTaxiFallback(rankDir) {
+      var edge = rankDir === 'LR' ? 'taxi-h' : 'taxi-v';
+      applyEdgeRouting(edge);
+      var opts = rankDir === 'LR'
+        ? { name: 'dagre', rankDir: 'LR', nodeSep: 22, edgeSep: 10, rankSep: 75, animate: false, padding: 40, ranker: 'network-simplex' }
+        : { name: 'dagre', rankDir: 'TB', nodeSep: 26, edgeSep: 12, rankSep: 60, animate: false, padding: 40, ranker: 'network-simplex' };
+      try {
+        var lay = cy.layout(opts);
+        lay.one('layoutstop', function () { fanEndpoints(edge); settle(); });
+        lay.run();
+      } catch (e) {
+        if (global.console) console.warn('dagre unavailable, falling back to cose.', e);
+        applyEdgeRouting('bezier');
+        var cy2 = cy.layout({ name: 'cose', animate: false, padding: 40, nodeRepulsion: 9000, idealEdgeLength: 70, edgeElasticity: 120, gravity: 0.3, numIter: 1200, nodeOverlap: 14 });
+        cy2.one('layoutstop', function () { fanEndpoints('bezier'); settle(); });
+        cy2.run();
+      }
+    }
+
+    // Node placement AND genuine per-edge orthogonal routing via ELK, computed together
+    // in one pass so edges sharing a rank-gap get distinct, non-overlapping polylines
+    // along their whole length — not just fanned endpoints. Backs "Orthogonal (routed)"
+    // (direction DOWN) and "Layered ↓/→" (DOWN/RIGHT); rendered as Cytoscape `segments`.
+    function runElkLayered(direction) {
       if (!elkInstance) elkInstance = new ELK();
       var elk = elkInstance;
       applyEdgeRouting('bezier');
+      var lr = direction === 'RIGHT';
 
       var graph = {
         id: 'root',
         layoutOptions: {
           'elk.algorithm': 'layered',
-          'elk.direction': 'DOWN',
+          'elk.direction': direction,
           'elk.edgeRouting': 'ORTHOGONAL',
           'elk.layered.nodePlacement.strategy': 'NETWORK_SIMPLEX',
-          'elk.layered.spacing.nodeNodeBetweenLayers': '55',
-          'elk.spacing.nodeNode': '38',
+          'elk.layered.spacing.nodeNodeBetweenLayers': lr ? '75' : '55',
+          'elk.spacing.nodeNode': lr ? '22' : '38',
           'elk.spacing.edgeNode': '14',
           'elk.spacing.edgeEdge': '12',
           'elk.layered.spacing.edgeEdgeBetweenLayers': '12',
@@ -398,6 +458,7 @@
       fit: fit,
       setTheme: setTheme,
       clearSelection: clearSelection,
+      focusNode: focusNode,
       present: present,
       LAYOUT_LABELS: LAYOUT_LABELS,
       TYPE_LABELS: TYPE_LABELS,

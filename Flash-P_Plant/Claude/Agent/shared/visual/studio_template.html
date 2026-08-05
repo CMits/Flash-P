@@ -154,6 +154,22 @@
     .toolbar button { width: 32px; padding: 0; font-size: 15px; line-height: 1; }
     .toolbar button.active { background: var(--border); }
     .toolbar .sep { width: 1px; align-self: stretch; background: var(--border); margin: 2px 1px; }
+    .viewsearch { position: relative; }
+    .viewsearch input { width: 150px; height: 30px; border-radius: 6px; padding: 0 8px; }
+    .viewsearch-results {
+      position: absolute; top: calc(100% + 4px); left: 0; min-width: 230px; max-height: 260px;
+      overflow: auto; background: var(--card); border: 1px solid var(--border); border-radius: 9px;
+      box-shadow: 0 6px 18px rgba(0,0,0,.16); z-index: 20; display: none;
+    }
+    .viewsearch-results.show { display: block; }
+    .viewsearch-results .item { padding: 6px 10px; cursor: pointer; font-size: 12.5px; }
+    .viewsearch-results .item .id { font-weight: 700; }
+    .viewsearch-results .item .fn {
+      color: var(--muted); font-size: 11px; display: block; overflow: hidden;
+      text-overflow: ellipsis; white-space: nowrap;
+    }
+    .viewsearch-results .item:hover, .viewsearch-results .item.active { background: var(--secondary); }
+    .viewsearch-results .empty { padding: 8px 10px; color: var(--muted); font-size: 12px; }
     .legend { flex-direction: column; align-items: flex-start; font-size: 12px; }
     .legend h4 { margin: 2px 0 4px; font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
     .legend .row { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
@@ -538,6 +554,11 @@
           <button id="view-zout" title="Zoom out">&#8722;</button>
           <button id="view-labels" title="Toggle labels">T</button>
           <span class="sep"></span>
+          <div class="viewsearch" id="view-search">
+            <input id="view-search-input" placeholder="Find gene / node…" autocomplete="off" />
+            <div class="viewsearch-results" id="view-search-results"></div>
+          </div>
+          <span class="sep"></span>
           <button id="view-png" title="Download network as PNG image">&#8681; PNG</button>
           <button id="view-svg" title="Download network as SVG (vector)">&#8681; SVG</button>
         </div>
@@ -877,6 +898,20 @@
     var curSlug = null;
     var viewApp = null, simApp = null, propApp = null;
 
+    // ---- view-tab node search ----
+    // closeSearchDropdown is reassigned fresh inside openView() each time (same trick
+    // used elsewhere in this file for per-network onclick handlers), so this single
+    // document-level listener pair works across network switches without leaking.
+    var viewSearchOpen = false;
+    var closeSearchDropdown = function () {};
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && viewSearchOpen) closeSearchDropdown();
+    });
+    document.addEventListener('click', function (e) {
+      var wrap = document.getElementById('view-search');
+      if (viewSearchOpen && wrap && !wrap.contains(e.target)) closeSearchDropdown();
+    });
+
     function destroyApps() {
       if (viewApp && viewApp.cy) { try { viewApp.cy.destroy(); } catch (e) {} viewApp = null; }
       if (simApp && simApp.cy) { try { simApp.cy.destroy(); } catch (e) {} simApp = null; }
@@ -1125,6 +1160,70 @@
       sel.value = 'elk';
       sel.onchange = function () { viewApp.applyLayout(sel.value); };
       document.getElementById('view-relayout').onclick = function () { viewApp.applyLayout(sel.value); };
+
+      // ---- node search ----
+      var searchNodes = (net.elements || [])
+        .filter(function (el) { return el.data && el.data.id != null && el.data.source == null; })
+        .map(function (el) { return { id: el.data.id, fn: el.data.fn || '', ty: el.data.ty }; });
+      var sInput = document.getElementById('view-search-input');
+      var sResults = document.getElementById('view-search-results');
+      var sMatches = [], sActive = -1;
+      sInput.value = '';
+      function matchNodes(q) {
+        q = q.trim().toLowerCase();
+        if (!q) return [];
+        return searchNodes.filter(function (n) {
+          return n.id.toLowerCase().indexOf(q) >= 0 || n.fn.toLowerCase().indexOf(q) >= 0;
+        }).slice(0, 25);
+      }
+      function renderSearchResults() {
+        sResults.innerHTML = sMatches.length
+          ? sMatches.map(function (n, i) {
+              return '<div class="item' + (i === sActive ? ' active' : '') + '" data-id="' + esc(n.id) + '">' +
+                '<span class="id">' + esc(n.id) + '</span>' +
+                (n.fn ? '<span class="fn">' + esc(n.fn) + '</span>' : '') + '</div>';
+            }).join('')
+          : '<div class="empty">No matches</div>';
+        viewSearchOpen = true;
+        sResults.classList.add('show');
+      }
+      closeSearchDropdown = function () {
+        viewSearchOpen = false;
+        sResults.classList.remove('show');
+        sActive = -1;
+      };
+      function pickMatch(n) {
+        if (!n) return;
+        viewApp.focusNode(n.id);
+        sInput.value = n.id;
+        closeSearchDropdown();
+      }
+      sInput.oninput = function () {
+        sMatches = matchNodes(sInput.value);
+        sActive = -1;
+        if (sInput.value.trim()) renderSearchResults(); else closeSearchDropdown();
+      };
+      sInput.onkeydown = function (e) {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          if (sMatches.length) { sActive = (sActive + 1) % sMatches.length; renderSearchResults(); }
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          if (sMatches.length) { sActive = (sActive - 1 + sMatches.length) % sMatches.length; renderSearchResults(); }
+        } else if (e.key === 'Enter') {
+          e.preventDefault();
+          pickMatch(sMatches[sActive >= 0 ? sActive : 0]);
+        } else if (e.key === 'Escape') {
+          closeSearchDropdown();
+        }
+      };
+      sResults.onclick = function (e) {
+        var item = e.target.closest ? e.target.closest('.item') : null;
+        if (!item) return;
+        var id = item.getAttribute('data-id');
+        pickMatch(sMatches.filter(function (n) { return n.id === id; })[0]);
+      };
+
       document.getElementById('view-fit').onclick = function () { viewApp.fit(); };
       var zoomBy = function (f) {
         var cy = viewApp.cy, b = cy.container().getBoundingClientRect();
