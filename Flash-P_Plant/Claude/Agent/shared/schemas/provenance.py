@@ -37,9 +37,17 @@ class StepRecord(BaseModel):
 
 
 class PipelineManifest(BaseModel):
-    """Complete provenance record for one network."""
+    """Complete provenance record for one network.
+
+    NOTE on the two "version" fields here -- they are NOT the same concept:
+      * metadata.flash_p_version  -> the Flash-P pipeline RELEASE that produced
+        this manifest (git-tag-derived; see flashp_version.get_version()).
+      * manifest_schema_version   -> the SHAPE/format of this JSON document
+        itself, bumped only if PipelineManifest's fields change. Unrelated to
+        the pipeline release number.
+    """
     metadata: FlashPMetadata
-    pipeline_version: str = "1.0"
+    manifest_schema_version: str = "1"
     network_directory: str = ""
     steps: List[StepRecord] = Field(default_factory=list)
     current_step: int = Field(

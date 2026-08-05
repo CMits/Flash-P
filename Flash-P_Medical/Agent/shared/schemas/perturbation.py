@@ -6,9 +6,14 @@ FLASH-P **Light** schema for Step 3 (PERTURBATION RECONCILIATION).
       perturbations:[{id,g,pt,ed,ng,m,exo,cb,rt}]}
 
 Light reconciled holds ONLY the **testable** tests (in_network == true). It is pure
-encoding + the test_id join key:
-  * dropped: in_network, condition, perturbations[] (duplicate of m/exo), doi/evidence,
-    notes, reconciliation_note, expected_magnitude, species, per-record phenotype_node.
+encoding + the test_id join key + provenance:
+  * dropped: in_network, condition, perturbations[] (duplicate of m/exo), notes,
+    reconciliation_note, expected_magnitude, species, per-record phenotype_node.
+  * kept: ``doi`` (``d``). It was dropped in the original Light cut, which left
+    ``evidence_doi`` plumbed all the way through ``validation_common`` to the exported
+    CSVs and empty in every row. A validated test that cannot name its source is not
+    much of a validation, so the DOI rides along; the evidence *sentence* lives in
+    ``data/evidence.json``, keyed by ``test_id``.
   * phenotype_node lives once in metadata.
 
 The three critical-type guarantees are preserved:
@@ -21,7 +26,7 @@ from typing import Dict, List, Literal, Optional
 
 from pydantic import Field, field_validator
 
-from .common import Direction, FlashPMetadata, ReconciliationType, SlimModel
+from .common import Direction, DoiStr, FlashPMetadata, ReconciliationType, SlimModel
 
 
 class PerturbationModification(SlimModel):
@@ -54,6 +59,10 @@ class ReconciledPerturbation(SlimModel):
         description="WT for most tests, mutant_alone for rescue experiments",
     )
     reconciliation_type: Optional[ReconciliationType] = Field(default=None, alias="rt")
+    doi: DoiStr = Field(
+        default="", alias="d",
+        description="Supporting DOI, carried through from perturbation_dataset.json",
+    )
 
     @field_validator("network_gene", mode="before")
     @classmethod

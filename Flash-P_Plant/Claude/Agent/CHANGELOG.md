@@ -1,5 +1,19 @@
 # Changelog
 
+> Entries headed `## [vX.Y.Z]` below are **pipeline releases**, tagged in git
+> (`git tag -l`, [GitHub Releases](https://github.com/CMits/Flash-P/releases)) — each
+> generated network's `flash_p_version` metadata field is derived live from these tags
+> (see `Agent/shared/flashp_version.py`). Entries headed `## [X.Y]` are the older, informal
+> **AGENT-SPEC version** log (CURATOR/BUILDER/etc. individually versioned) that predates the
+> git-tag release system — kept as historical detail, not renumbered.
+
+## [v1.0.0] - 2026-08-05
+
+### Baseline release
+Retroactively tagged snapshot of `main`, marking the point the git-tag release system was
+introduced. Functionally identical to the untagged code that preceded it — see the AGENT-SPEC
+entries below for what had actually shipped by this point.
+
 ## [1.1] - 2026-03-31
 
 ### Changed — Post Shoot-Branching Run Lessons Baked Into Specs

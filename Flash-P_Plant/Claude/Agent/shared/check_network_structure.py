@@ -2,16 +2,23 @@
 """
 FLASH-P v1.0 - Network Structure QA Check
 
-Deterministic structural validator for network.json. Runs five checks that
+Deterministic structural validator for network.json. Runs six checks that
 can be verified without biological judgment, reports violations, and
 optionally auto-repairs the safely-fixable ones.
 
-The 5 checks:
+The 6 checks:
   1. Connectivity: every node must reach the PHENOTYPE via a directed path.
-  2. DOI presence: every edge must have a non-empty DOI in its evidence.
+  2. DOI presence and shape: every edge must carry a well-formed 10.xxxx/yyy DOI.
   3. Node naming conventions: regex per node type.
   4. is_source flag correctness: is_source=true iff node has no incoming edges.
   5. Phenotype node sanity: exactly one PHENOTYPE-typed node matching metadata.
+  6. Evidence: every edge is grounded in a paper we actually retrieved and read,
+     per data/evidence.json (written by verify_evidence.py, pipeline Step 1.6).
+
+Checks 2 and 6 are deliberately separate. A DOI can be perfectly formed, resolve
+to a real paper, and still be the wrong citation — that is in fact the common
+failure, and no amount of string checking finds it. Check 2 catches typos;
+check 6 reports what happened when the paper was actually read.
 
 Usage:
     python check_network_structure.py <network_dir> [--dry-run] [--fix] [--backup]
@@ -21,7 +28,7 @@ Exit codes:
     1 = one or more checks failed
 
 Auto-fixable: checks 1 (connectivity) and 4 (is_source).
-Report-only: checks 2 (DOI), 3 (naming), 5 (phenotype sanity).
+Report-only: checks 2 (DOI), 3 (naming), 5 (phenotype sanity), 6 (evidence).
 
 The script is non-blocking: it is NOT registered as a settings.json hook.
 Run it manually or from the BUILDER agent's post-build self-check.
@@ -84,6 +91,101 @@ def extract_doi(edge: Dict) -> str:
         if doi:
             return doi
     return ""
+
+
+# The bare form only: no 'doi:' prefix, no https://doi.org/ URL. Those resolve in a
+# browser but break every string comparison and every API lookup downstream.
+DOI_SHAPE = re.compile(r"^10\.\d{4,9}/\S+$")
+
+
+# ---------------------------------------------------------------------------
+# Check 6: Evidence grounding (reads data/evidence.json)
+# ---------------------------------------------------------------------------
+
+def check_evidence(network_path: Path, edges: List[Dict]) -> Dict[str, Any]:
+    """Summarise data/evidence.json against the edges actually in the network.
+
+    Reports rather than judges. An unverified edge is not automatically wrong — the
+    paper may be paywalled, or the claim may be spread across two sentences — so this
+    surfaces the counts and lets a human decide. What it will not do is let a network
+    quietly claim provenance it does not have.
+
+    The join is on (source, target, sign): the BUILDER renumbers edge ids between
+    curated_edges.json and network.json, so ids cannot be matched across the two.
+    """
+    ev_file = network_path.parent.parent / "data" / "evidence.json"
+    if not ev_file.exists():
+        return {
+            "present": False,
+            "passed": False,
+            "message": (f"no {ev_file.name} — this network's citations have never been "
+                        f"checked against the papers. Run: "
+                        f"python Agent/shared/verify_evidence.py <NET>"),
+        }
+    try:
+        ev = json.loads(ev_file.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as e:
+        return {"present": True, "passed": False, "message": f"unreadable evidence.json: {e}"}
+
+    def key(s, t, x):
+        return (str(s).upper(), str(t).upper(), 1 if int(x or 0) >= 0 else -1)
+
+    by_edge = {key(r.get("s"), r.get("t"), r.get("x")): r for r in ev.get("edges", [])}
+
+    counts = {"verified": 0, "repaired": 0, "quarantine": 0}
+    ungrounded: List[Dict] = []
+    unchecked: List[Dict] = []
+    for e in edges:
+        rec = by_edge.get(key(e.get("source"), e.get("target"), e.get("sign")))
+        if rec is None:
+            unchecked.append({"source": e.get("source"), "target": e.get("target"),
+                              "sign": e.get("sign")})
+            continue
+        st = rec.get("verification", "quarantine")
+        counts[st] = counts.get(st, 0) + 1
+        if st == "quarantine":
+            ungrounded.append({"source": e.get("source"), "target": e.get("target"),
+                               "doi": rec.get("doi", ""),
+                               "reason": rec.get("verification_reason", "")})
+
+    total = len(edges)
+    grounded = counts["verified"] + counts["repaired"]
+    summary = ev.get("summary", {})
+
+    # Perturbation tests are claims about the literature exactly as much as edges are —
+    # "gene X knocked out increases the phenotype" is a citation or it is nothing. They
+    # are counted from evidence.json rather than the network, which holds no tests.
+    pcounts = {"verified": 0, "repaired": 0, "quarantine": 0}
+    pungrounded: List[Dict] = []
+    for r in ev.get("perturbations", []):
+        st = r.get("verification", "quarantine")
+        pcounts[st] = pcounts.get(st, 0) + 1
+        if st == "quarantine":
+            pungrounded.append({"id": r.get("id", ""), "gene": r.get("g", ""),
+                                "pt": r.get("pt", ""), "ed": r.get("ed", ""),
+                                "doi": r.get("doi", ""),
+                                "reason": r.get("verification_reason", "")})
+    ptotal = sum(pcounts.values())
+    pgrounded = pcounts["verified"] + pcounts["repaired"]
+
+    return {
+        "present": True,
+        "counts": counts,
+        "grounded": grounded,
+        "total_edges": total,
+        "grounded_pct": round(100.0 * grounded / total, 1) if total else 0.0,
+        "ungrounded": ungrounded,
+        # Edges added after verification ran — the network changed and nobody re-checked.
+        "unchecked": unchecked,
+        "pert_counts": pcounts,
+        "pert_grounded": pgrounded,
+        "pert_total": ptotal,
+        "pert_grounded_pct": round(100.0 * pgrounded / ptotal, 1) if ptotal else 0.0,
+        "pert_ungrounded": pungrounded,
+        "papers": summary.get("papers", 0),
+        "papers_with_fulltext": summary.get("papers_with_fulltext", 0),
+        "passed": not ungrounded and not unchecked and not pungrounded,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -196,8 +298,17 @@ def audit_network(network_path: Path) -> Dict[str, Any]:
         reachable, floating_edges = check_connectivity(nodes, edges, phenotype_id)
         floating_nodes = [n for n in nodes if n["id"] not in reachable]
 
-    # Check 2: DOI presence
+    # Check 2: DOI presence AND shape.
+    # Presence alone caught nothing: every DOI in every built network is non-empty,
+    # so this check passed on all of them, wrong ones included. Shape catches typos;
+    # whether the paper actually says what the edge claims is check 6's job, because
+    # only reading the paper can answer that.
     edges_missing_doi = [e for e in edges if not extract_doi(e)]
+    edges_malformed_doi = [e for e in edges
+                           if extract_doi(e) and not DOI_SHAPE.match(extract_doi(e))]
+
+    # Check 6: evidence — is every claim grounded in a paper we actually read?
+    evidence_report = check_evidence(network_path, edges)
 
     # Check 3: naming conventions
     naming_violations = []
@@ -214,6 +325,11 @@ def audit_network(network_path: Path) -> Dict[str, Any]:
     # Check 4: is_source correctness
     source_mismatches = check_is_source(nodes, edges)
 
+    # Check 7: flash_p_version consistency across every output file in this network
+    # (advisory-only, non-blocking — see check_version_consistency below. Check 6 is
+    # evidence grounding; this is a separate, later addition, not part of that numbering.)
+    version_report = check_version_consistency(network_path.parent.parent)
+
     return {
         "network_path": str(network_path),
         "total_nodes": len(nodes),
@@ -227,9 +343,12 @@ def audit_network(network_path: Path) -> Dict[str, Any]:
         },
         "check_2_doi": {
             "missing_count": len(edges_missing_doi),
+            "malformed_count": len(edges_malformed_doi),
             "edges": edges_missing_doi,
-            "passed": len(edges_missing_doi) == 0,
+            "malformed": edges_malformed_doi,
+            "passed": len(edges_missing_doi) == 0 and len(edges_malformed_doi) == 0,
         },
+        "check_6_evidence": evidence_report,
         "check_3_naming": {
             "violation_count": len(naming_violations),
             "violations": naming_violations,
@@ -246,6 +365,42 @@ def audit_network(network_path: Path) -> Dict[str, Any]:
             "phenotype_count": len(phenotype_nodes),
             "passed": len(phenotype_issues) == 0,
         },
+        "check_7_version_consistency": version_report,
+    }
+
+
+def check_version_consistency(network_dir: Path) -> Dict[str, Any]:
+    """WARNING-only, non-blocking: every output JSON's metadata.flash_p_version in this
+    network folder should agree. A network re-touched across pipeline versions can
+    legitimately span two values, but when it does, someone should look — this is the
+    drift already observed in practice (e.g. pipeline_manifest.json stuck at an older
+    value while network/network.json had moved on). Deliberately excluded from the
+    blocking pass/fail checks 1-5 and from --fix; version drift needs a human decision,
+    not an auto-repair, and shouldn't fail CI-style exit-code use of this script.
+    """
+    # Guard: only scan real Flash-P network folders (identified by a network/ or data/
+    # subdir). Without this, a shallow/synthetic path (e.g. from _self_test's tempdir,
+    # which is only one level deep) would resolve network_dir one level too high and
+    # rglob an unrelated directory tree.
+    if not (network_dir / "network").is_dir() and not (network_dir / "data").is_dir():
+        return {"distinct_versions": [], "by_version": {}, "passed": True}
+
+    seen: Dict[str, List[str]] = {}
+    for jf in sorted(network_dir.rglob("*.json")):
+        try:
+            d = json.loads(jf.read_text(encoding="utf-8"))
+        except Exception:
+            continue  # not JSON (e.g. TOON-format tabular data saved with a .json extension)
+        if not isinstance(d, dict):
+            continue  # e.g. steady-state dumps, which are top-level JSON arrays
+        meta = d.get("metadata")
+        v = meta.get("flash_p_version") if isinstance(meta, dict) else None
+        if v:
+            seen.setdefault(v, []).append(str(jf.relative_to(network_dir)))
+    return {
+        "distinct_versions": sorted(seen),
+        "by_version": seen,
+        "passed": len(seen) <= 1,
     }
 
 
@@ -336,7 +491,7 @@ def render_report(report: Dict, fix_mode: bool = False) -> str:
 
     # Check 1
     c1 = report["check_1_connectivity"]
-    lines.append("[1/5] Connectivity (BFS from phenotype)")
+    lines.append("[1/6] Connectivity (BFS from phenotype)")
     if c1["passed"]:
         lines.append(f"  PASS - all {c1['reachable_count']} nodes reach the phenotype")
     else:
@@ -357,22 +512,30 @@ def render_report(report: Dict, fix_mode: bool = False) -> str:
     # Check 2
     c2 = report["check_2_doi"]
     lines.append("")
-    lines.append("[2/5] DOI presence")
+    lines.append("[2/6] DOI presence and shape")
     if c2["passed"]:
-        lines.append(f"  PASS - all {report['total_edges']} edges have DOIs")
+        lines.append(f"  PASS - all {report['total_edges']} edges carry a well-formed DOI")
     else:
-        lines.append(f"  MISSING DOIs: {c2['missing_count']} edges")
-        for e in c2["edges"][:10]:
-            lines.append(f"    - {e.get('source')} -> {e.get('target')} "
-                         f"(edge_id={e.get('edge_id', '?')})")
-        if c2["missing_count"] > 10:
-            lines.append(f"    ... and {c2['missing_count'] - 10} more")
+        if c2["missing_count"]:
+            lines.append(f"  MISSING DOIs: {c2['missing_count']} edges")
+            for e in c2["edges"][:10]:
+                lines.append(f"    - {e.get('source')} -> {e.get('target')} "
+                             f"(edge_id={e.get('edge_id', '?')})")
+            if c2["missing_count"] > 10:
+                lines.append(f"    ... and {c2['missing_count'] - 10} more")
+        if c2.get("malformed_count"):
+            lines.append(f"  MALFORMED DOIs: {c2['malformed_count']} edges "
+                         f"(expected the bare form 10.xxxx/suffix)")
+            for e in c2["malformed"][:10]:
+                lines.append(f"    - {e.get('source')} -> {e.get('target')}: "
+                             f"{extract_doi(e)[:60]!r}")
         lines.append("  -> NOT auto-fixable (needs re-curation)")
+        lines.append("  Note: a well-formed DOI can still be the wrong paper — see check 6.")
 
     # Check 3
     c3 = report["check_3_naming"]
     lines.append("")
-    lines.append("[3/5] Node naming conventions")
+    lines.append("[3/6] Node naming conventions")
     if c3["passed"]:
         lines.append(f"  PASS - all {report['total_nodes']} node names "
                      f"match type-specific regex")
@@ -388,7 +551,7 @@ def render_report(report: Dict, fix_mode: bool = False) -> str:
     # Check 4
     c4 = report["check_4_is_source"]
     lines.append("")
-    lines.append("[4/5] is_source flag correctness")
+    lines.append("[4/6] is_source flag correctness")
     if c4["passed"]:
         lines.append("  PASS - all is_source flags consistent with edge structure")
     else:
@@ -407,7 +570,7 @@ def render_report(report: Dict, fix_mode: bool = False) -> str:
     # Check 5
     c5 = report["check_5_phenotype"]
     lines.append("")
-    lines.append("[5/5] Phenotype node sanity")
+    lines.append("[5/6] Phenotype node sanity")
     if c5["passed"]:
         lines.append(
             f"  PASS - exactly 1 PHENOTYPE node "
@@ -418,14 +581,64 @@ def render_report(report: Dict, fix_mode: bool = False) -> str:
             lines.append(f"  ISSUE: {issue}")
         lines.append("  -> NOT auto-fixable (needs manual metadata correction)")
 
+    # Check 6
+    c6 = report["check_6_evidence"]
+    lines.append("")
+    lines.append("[6/6] Evidence grounding")
+    if not c6.get("present"):
+        lines.append(f"  NOT CHECKED - {c6.get('message', '')}")
+    elif c6["passed"]:
+        lines.append(f"  PASS - all {c6['total_edges']} edges and {c6['pert_total']} perturbation "
+                     f"tests grounded in a retrieved paper")
+        lines.append(f"  {c6['papers']} papers cited, {c6['papers_with_fulltext']} with "
+                     f"open-access full text")
+    else:
+        lines.append(f"  EDGES: {c6['grounded']}/{c6['total_edges']} grounded ({c6['grounded_pct']}%)  "
+                     f"[verified {c6['counts']['verified']}, repaired {c6['counts']['repaired']}, "
+                     f"unverified {c6['counts']['quarantine']}]")
+        for e in c6["ungrounded"][:6]:
+            lines.append(f"    - {e['source']} -> {e['target']}: {e['reason'][:72]}")
+        if len(c6["ungrounded"]) > 6:
+            lines.append(f"    ... and {len(c6['ungrounded']) - 6} more")
+        lines.append(f"  TESTS: {c6['pert_grounded']}/{c6['pert_total']} grounded "
+                     f"({c6['pert_grounded_pct']}%)  "
+                     f"[verified {c6['pert_counts']['verified']}, "
+                     f"repaired {c6['pert_counts']['repaired']}, "
+                     f"unverified {c6['pert_counts']['quarantine']}]")
+        for p in c6["pert_ungrounded"][:6]:
+            lines.append(f"    - {p['id']} {p['gene']} {p['pt']} -> {p['ed']}: {p['reason'][:56]}")
+        if len(c6["pert_ungrounded"]) > 6:
+            lines.append(f"    ... and {len(c6['pert_ungrounded']) - 6} more")
+        if c6["unchecked"]:
+            lines.append(f"  NOT IN evidence.json: {len(c6['unchecked'])} edges — the network "
+                         f"changed after verification ran; re-run verify_evidence.py")
+        lines.append("  -> NOT auto-fixable (an unverified claim needs a human, or a better paper)")
+
+    # Check 7 (advisory only — not part of the [N/6] pass/fail scoring or exit code;
+    # a later, separate addition from check 6's evidence grounding)
+    c7 = report["check_7_version_consistency"]
+    lines.append("")
+    lines.append("[advisory] flash_p_version consistency across this network's output files")
+    if c7["passed"]:
+        v = c7["distinct_versions"][0] if c7["distinct_versions"] else "(none found)"
+        lines.append(f"  OK - every output file agrees: {v}")
+    else:
+        lines.append(f"  WARNING: {len(c7['distinct_versions'])} distinct versions found "
+                     f"across this network's output files")
+        for v in c7["distinct_versions"]:
+            files = c7["by_version"][v]
+            lines.append(f"    - {v!r}: {len(files)} file(s), e.g. {files[0]}")
+        lines.append("  -> not auto-fixable and not counted in the pass/fail result below; "
+                     "re-run the step(s) that wrote the stale file(s) to refresh them")
+
     # Summary
     passed = sum(1 for k in ("check_1_connectivity", "check_2_doi",
                               "check_3_naming", "check_4_is_source",
-                              "check_5_phenotype") if report[k]["passed"])
-    failed = 5 - passed
+                              "check_5_phenotype", "check_6_evidence") if report[k]["passed"])
+    failed = 6 - passed
     lines.append("")
     if failed == 0:
-        lines.append("RESULT: ALL 5 CHECKS PASSED  -  Exit code: 0")
+        lines.append("RESULT: ALL 6 CHECKS PASSED  -  Exit code: 0")
     else:
         lines.append(f"RESULT: {failed} CHECK(S) FAILED  -  Exit code: 1")
         if not fix_mode:
@@ -497,7 +710,7 @@ def main() -> int:
         report[k]["passed"]
         for k in ("check_1_connectivity", "check_2_doi",
                   "check_3_naming", "check_4_is_source",
-                  "check_5_phenotype")
+                  "check_5_phenotype", "check_6_evidence")
     )
     return 0 if all_pass else 1
 
@@ -507,7 +720,7 @@ def main() -> int:
 # ---------------------------------------------------------------------------
 
 def _self_test() -> None:
-    """Run synthetic-network tests for all 5 checks."""
+    """Run synthetic-network tests for all 6 checks."""
     import tempfile
 
     def make_net(nodes: List[Dict], edges: List[Dict],
@@ -517,12 +730,29 @@ def _self_test() -> None:
             meta["phenotype_node"] = phenotype_in_meta
         return {"metadata": meta, "nodes": nodes, "edges": edges}
 
-    def run_audit(net: Dict) -> Dict:
+    def run_audit(net: Dict, evidence: Dict | None = None) -> Dict:
+        # Mirror the real layout (<NET>/network/network.json + <NET>/data/), because
+        # check 6 resolves evidence.json relative to the network file.
         with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "network.json"
-            with open(path, "w") as f:
+            netdir = Path(tmp) / "Trait"
+            (netdir / "network").mkdir(parents=True)
+            (netdir / "data").mkdir()
+            path = netdir / "network" / "network.json"
+            with open(path, "w", encoding="utf-8") as f:
                 json.dump(net, f)
+            if evidence is not None:
+                with open(netdir / "data" / "evidence.json", "w", encoding="utf-8") as f:
+                    json.dump(evidence, f)
             return audit_network(path)
+
+    def evidence_for(edges: List[Dict], status: str = "verified") -> Dict:
+        return {"summary": {"papers": len(edges), "papers_with_fulltext": 0},
+                "papers": {}, "perturbations": [],
+                "edges": [{"s": e["source"], "t": e["target"], "x": e["sign"],
+                           "doi": extract_doi(e), "evidence": "a real sentence from the paper",
+                           "source_locator": "abstract", "verification": status,
+                           "verification_reason": "" if status != "quarantine" else "not co-mentioned"}
+                          for e in edges]}
 
     # --- Test 1: connectivity ---
     # A -> B -> Phenotype, plus isolated C -> D
@@ -536,18 +766,18 @@ def _self_test() -> None:
         ],
         edges=[
             {"source": "A", "target": "B", "sign": 1,
-             "evidence": [{"doi": "10.1/x"}]},
+             "evidence": [{"doi": "10.1234/x"}]},
             {"source": "B", "target": "Phenotype", "sign": 1,
-             "evidence": [{"doi": "10.1/y"}]},
+             "evidence": [{"doi": "10.1234/y"}]},
             {"source": "C", "target": "D", "sign": 1,
-             "evidence": [{"doi": "10.1/z"}]},
+             "evidence": [{"doi": "10.1234/z"}]},
         ],
     )
     r = run_audit(net)
     floating_ids = {n["id"] for n in r["check_1_connectivity"]["floating_nodes"]}
     assert floating_ids == {"C", "D"}, f"Expected {{C, D}} floating, got {floating_ids}"
     assert not r["check_1_connectivity"]["passed"]
-    print("[1/5] connectivity: detected C, D floating  - OK")
+    print("[1/6] connectivity: detected C, D floating  - OK")
 
     # --- Test 2: DOI ---
     net_no_doi = make_net(
@@ -561,7 +791,7 @@ def _self_test() -> None:
     r = run_audit(net_no_doi)
     assert not r["check_2_doi"]["passed"]
     assert r["check_2_doi"]["missing_count"] == 1
-    print("[2/5] DOI presence: detected missing DOI  - OK")
+    print("[2/6] DOI presence: detected missing DOI  - OK")
 
     # --- Test 3: naming ---
     net_bad_name = make_net(
@@ -570,12 +800,12 @@ def _self_test() -> None:
             {"id": "Phenotype", "type": "PHENOTYPE"},
         ],
         edges=[{"source": "brc1", "target": "Phenotype", "sign": 1,
-                 "evidence": [{"doi": "10.1/x"}]}],
+                 "evidence": [{"doi": "10.1234/x"}]}],
     )
     r = run_audit(net_bad_name)
     assert not r["check_3_naming"]["passed"]
     assert r["check_3_naming"]["violations"][0]["node_id"] == "brc1"
-    print("[3/5] naming: detected lowercase GENE  - OK")
+    print("[3/6] naming: detected lowercase GENE  - OK")
 
     # --- Test 4: is_source ---
     # Node A has no incoming; is_source=false -> mismatch
@@ -587,16 +817,16 @@ def _self_test() -> None:
         ],
         edges=[
             {"source": "A", "target": "B", "sign": 1,
-             "evidence": [{"doi": "10.1/x"}]},
+             "evidence": [{"doi": "10.1234/x"}]},
             {"source": "B", "target": "Phenotype", "sign": 1,
-             "evidence": [{"doi": "10.1/y"}]},
+             "evidence": [{"doi": "10.1234/y"}]},
         ],
     )
     r = run_audit(net_bad_source)
     assert not r["check_4_is_source"]["passed"]
     mismatch_ids = {m["node_id"] for m in r["check_4_is_source"]["mismatches"]}
     assert mismatch_ids == {"A", "B"}
-    print("[4/5] is_source: detected mismatches on A, B  - OK")
+    print("[4/6] is_source: detected mismatches on A, B  - OK")
 
     # --- Test 5: phenotype ---
     net_two_phen = make_net(
@@ -606,32 +836,55 @@ def _self_test() -> None:
             {"id": "P2", "type": "PHENOTYPE"},
         ],
         edges=[{"source": "A", "target": "P1", "sign": 1,
-                 "evidence": [{"doi": "10.1/x"}]}],
+                 "evidence": [{"doi": "10.1234/x"}]}],
     )
     r = run_audit(net_two_phen)
     assert not r["check_5_phenotype"]["passed"]
     assert "Multiple" in r["check_5_phenotype"]["issues"][0]
-    print("[5/5] phenotype: detected two PHENOTYPE nodes  - OK")
+    print("[5/6] phenotype: detected two PHENOTYPE nodes  - OK")
+
+    # --- Test 6: evidence grounding ---
+    clean_edges = [
+        {"source": "A", "target": "B", "sign": 1, "evidence": [{"doi": "10.1234/aaa"}]},
+        {"source": "B", "target": "Phenotype", "sign": 1, "evidence": [{"doi": "10.1234/bbb"}]},
+    ]
+    clean_nodes = [
+        {"id": "A", "type": "GENE", "is_source": True},
+        {"id": "B", "type": "GENE", "is_source": False},
+        {"id": "Phenotype", "type": "PHENOTYPE", "is_source": False},
+    ]
+    net_clean = make_net(nodes=clean_nodes, edges=clean_edges)
+
+    r = run_audit(net_clean)                       # no evidence.json at all
+    assert not r["check_6_evidence"]["passed"] and not r["check_6_evidence"]["present"]
+    print("[6/6] evidence: unverified network reported as unchecked  - OK")
+
+    r = run_audit(net_clean, evidence_for(clean_edges, "quarantine"))
+    assert not r["check_6_evidence"]["passed"]
+    assert len(r["check_6_evidence"]["ungrounded"]) == 2
+    print("[6/6] evidence: quarantined edges surfaced  - OK")
+
+    # An edge added after verification must not silently count as grounded.
+    r = run_audit(make_net(nodes=clean_nodes + [{"id": "C", "type": "GENE"}],
+                           edges=clean_edges + [{"source": "C", "target": "B", "sign": 1,
+                                                 "evidence": [{"doi": "10.1234/ccc"}]}]),
+                  evidence_for(clean_edges))
+    assert len(r["check_6_evidence"]["unchecked"]) == 1
+    print("[6/6] evidence: edge added after verification flagged  - OK")
+
+    # Malformed DOI must fail check 2 (it passed the old truthiness test).
+    r = run_audit(make_net(nodes=clean_nodes,
+                           edges=[{"source": "A", "target": "Phenotype", "sign": 1,
+                                   "evidence": [{"doi": "doi:10.1234/x"}]}]))
+    assert r["check_2_doi"]["malformed_count"] == 1 and not r["check_2_doi"]["passed"]
+    print("[2/6] doi: malformed 'doi:' prefix rejected  - OK")
 
     # --- Clean network: all pass ---
-    net_clean = make_net(
-        nodes=[
-            {"id": "A", "type": "GENE", "is_source": True},
-            {"id": "B", "type": "GENE", "is_source": False},
-            {"id": "Phenotype", "type": "PHENOTYPE", "is_source": False},
-        ],
-        edges=[
-            {"source": "A", "target": "B", "sign": 1,
-             "evidence": [{"doi": "10.1/x"}]},
-            {"source": "B", "target": "Phenotype", "sign": 1,
-             "evidence": [{"doi": "10.1/y"}]},
-        ],
-    )
-    r = run_audit(net_clean)
+    r = run_audit(net_clean, evidence_for(clean_edges))
     for k in ("check_1_connectivity", "check_2_doi", "check_3_naming",
-              "check_4_is_source", "check_5_phenotype"):
-        assert r[k]["passed"], f"{k} should pass on clean network"
-    print("[All 5] clean network: all checks pass  - OK")
+              "check_4_is_source", "check_5_phenotype", "check_6_evidence"):
+        assert r[k]["passed"], f"{k} should pass on clean network: {r[k]}"
+    print("[All 6] clean network: all checks pass  - OK")
 
     print("\nAll self-tests passed.")
 

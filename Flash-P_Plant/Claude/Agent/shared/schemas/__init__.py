@@ -8,6 +8,7 @@ Import from here for validation and type checking.
 from .common import (
     Confidence,
     Direction,
+    DoiStr,
     EdgeEffect,
     EvidenceEntry,
     FlashPMetadata,
@@ -15,6 +16,14 @@ from .common import (
     PerturbationType,
     ReconciliationType,
     Verification,
+)
+from .evidence import (
+    Attempt,
+    EdgeEvidence,
+    EvidenceFile,
+    EvidenceRecord,
+    PaperRecord,
+    PerturbationEvidence,
 )
 from .literature import (
     CuratedEdge,
@@ -62,9 +71,12 @@ from .validation import (
 
 __all__ = [
     # Common
-    "Confidence", "Direction", "EdgeEffect", "EvidenceEntry",
+    "Confidence", "Direction", "DoiStr", "EdgeEffect", "EvidenceEntry",
     "FlashPMetadata", "NodeType", "PerturbationType",
     "ReconciliationType", "Verification",
+    # Evidence (provenance)
+    "PaperRecord", "Attempt", "EvidenceRecord", "EdgeEvidence",
+    "PerturbationEvidence", "EvidenceFile",
     # Literature
     "CuratedEdge", "CuratedEdgesFile",
     "RawPerturbation", "PerturbationDatasetFile",

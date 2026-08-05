@@ -27,6 +27,7 @@ from schemas import (
     AccuracyMetricsFile,
     AlgebraicEquationsFile,
     CuratedEdgesFile,
+    EvidenceFile,
     FailureAnalysisFile,
     MethodComparisonFile,
     NetworkFile,
@@ -43,6 +44,7 @@ from schemas import (
 # Map file name patterns to Pydantic models
 FILE_SCHEMA_MAP = {
     "curated_edges.json": CuratedEdgesFile,
+    "evidence.json": EvidenceFile,
     "perturbation_dataset.json": PerturbationDatasetFile,
     "reconciled_perturbation_dataset.json": ReconciledPerturbationFile,
     "network.json": NetworkFile,

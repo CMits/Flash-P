@@ -20,11 +20,13 @@ keys (they appear once per file).
 | `exo` | exogenous_supply | reconciled |
 | `cb` | comparison_baseline | reconciled, results |
 | `rt` | reconciliation_type | reconciled |
+| `d` | doi | curated_edges, network, perturbation, **reconciled** |
 | `eid` | edge_id | curated_edges, network |
 | `s` | source | curated_edges, network |
 | `t` | target | curated_edges, network |
 | `x` | sign | curated_edges, network |
 | `d` | doi | all (single provenance field) |
+| `v` | verification | curated_edges, perturbation — written by Step 1.6 **only** when the claim could not be grounded (`"q"`). Absent = grounded. Never hand-edited. |
 | `sp` | species | perturbation |
 | `n` | node | equations, annotations |
 | `ty` | type | network nodes, equations, annotations |

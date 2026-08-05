@@ -33,7 +33,7 @@ import webbrowser
 from pathlib import Path
 
 import light_io
-from flashp_version import get_version
+from flashp_version import get_version, get_version_info
 
 # Reuse the visualiser's plumbing (payload build, library inlining, style load).
 import network_to_visual as viz
@@ -103,8 +103,56 @@ def _solver_inputs(network_dir: Path):
             "accuracy": acc, "bestMethod": best, "params": params}
 
 
-def build_network_entry(network_dir: Path) -> dict:
-    """One embedded network: viewer payload (reused) + solver payload."""
+def _evidence_inputs(network_dir: Path, papers: dict, fulltexts: dict,
+                     with_fulltext: bool = True) -> dict:
+    """Per-claim provenance from ``data/evidence.json``, for the Studio drawer.
+
+    Papers and full texts are hoisted into shared, DOI-keyed maps rather than copied
+    per network: several traits routinely cite the same review, and a 40 kB full text
+    embedded four times is 120 kB of pure duplication in a file people open by
+    double-click.
+
+    Returns the per-network part only; ``papers`` and ``fulltexts`` are filled in place.
+    """
+    ev_file = network_dir / "data" / "evidence.json"
+    if not ev_file.exists():
+        return {}
+    try:
+        ev = json.loads(ev_file.read_text(encoding="utf-8"))
+    except Exception as e:
+        print(f"    (evidence skipped for {network_dir.name}: {e})")
+        return {}
+
+    for doi, p in (ev.get("papers") or {}).items():
+        if doi not in papers:
+            papers[doi] = p
+        rel = p.get("fulltext_file") or ""
+        if with_fulltext and rel and doi not in fulltexts:
+            ft_path = network_dir / "data" / rel
+            if ft_path.exists():
+                fulltexts[doi] = ft_path.read_text(encoding="utf-8", errors="replace")
+
+    # Only the fields the drawer renders — `tried` trails and reasons stay in the JSON
+    # on disk, where someone auditing a verdict can read them at full length.
+    def slim(rows, keys):
+        return [{k: r.get(k) for k in keys if r.get(k) not in (None, "")} for r in rows]
+
+    return {
+        "summary": ev.get("summary") or {},
+        "edges": slim(ev.get("edges") or [],
+                      ("s", "t", "x", "doi", "evidence", "source_locator",
+                       "verification", "verification_reason", "confidence", "previous_doi",
+                       "species", "species_source")),
+        "perts": slim(ev.get("perturbations") or [],
+                      ("id", "g", "pt", "ed", "sp", "doi", "evidence", "source_locator",
+                       "verification", "verification_reason", "confidence", "previous_doi",
+                       "species", "species_source")),
+    }
+
+
+def build_network_entry(network_dir: Path, papers: dict, fulltexts: dict,
+                        with_fulltext: bool = True) -> dict:
+    """One embedded network: viewer payload (reused) + solver payload + evidence."""
     base = viz.build_payload(network_dir)  # {meta, elements, style, annById}
     meta = base["meta"]
     entry = {
@@ -118,6 +166,9 @@ def build_network_entry(network_dir: Path) -> dict:
         "annById": base["annById"],
     }
     entry.update(_solver_inputs(network_dir))
+    ev = _evidence_inputs(network_dir, papers, fulltexts, with_fulltext)
+    if ev:
+        entry["ev"] = ev
     return entry
 
 
@@ -163,13 +214,21 @@ def _script(path: Path) -> str:
     return f"<script>{js}</script>"
 
 
-def write_studio(networks: list, out_html: Path) -> bool:
+def write_studio(networks: list, out_html: Path,
+                 papers: dict = None, fulltexts: dict = None) -> bool:
     template = TEMPLATE_FILE.read_text(encoding="utf-8")
     style = json.loads(viz.STYLE_FILE.read_text(encoding="utf-8"))
+    vinfo = get_version_info()
     payload = {
         "generated": datetime.date.today().isoformat(),
+        "pipeline_version": vinfo["flash_p_version"],
+        "pipeline_commit": vinfo.get("git_commit", ""),
+        "pipeline_is_release": vinfo.get("is_release", False),
         "style": style,
         "networks": networks,
+        # Shared across networks, keyed by DOI — see _evidence_inputs.
+        "papers": papers or {},
+        "fulltext": fulltexts or {},
     }
     data_json = json.dumps(payload, ensure_ascii=False).replace("</", "<\\/")
 
@@ -198,6 +257,9 @@ def main():
     parser.add_argument("networks_dir", help="Directory containing trait networks (e.g. 'networks')")
     parser.add_argument("--no-open", action="store_true",
                         help="Do not auto-open the Studio in a browser after building.")
+    parser.add_argument("--lean", action="store_true",
+                        help="Embed abstracts but not open-access full texts "
+                             "(smaller file; the drawer then shows abstracts only).")
     args = parser.parse_args()
 
     root = Path(args.networks_dir)
@@ -215,11 +277,19 @@ def main():
         print("  No networks found (looked for */network/network.json). Nothing to build.")
         sys.exit(1)
 
-    entries = []
+    entries, papers, fulltexts = [], {}, {}
     for d in dirs:
         try:
-            entries.append(build_network_entry(d))
-            print(f"  + {entries[-1]['name']}  ({entries[-1]['nNodes']} nodes, {entries[-1]['nEdges']} edges)")
+            entries.append(build_network_entry(d, papers, fulltexts, with_fulltext=not args.lean))
+            e = entries[-1]
+            ev = e.get("ev") or {}
+            note = ""
+            if ev:
+                s = ev.get("summary") or {}
+                ec = s.get("edges") or {}
+                note = (f"  [evidence: {ec.get('verified', 0)} verified, "
+                        f"{ec.get('repaired', 0)} repaired, {ec.get('quarantine', 0)} quarantined]")
+            print(f"  + {e['name']}  ({e['nNodes']} nodes, {e['nEdges']} edges){note}")
         except Exception as e:
             print(f"  ! skipped {d.name}: {e}")
 
@@ -227,10 +297,20 @@ def main():
         print("  No networks could be loaded.")
         sys.exit(1)
 
+    missing = [e["name"] for e in entries if not e.get("ev")]
+    if missing:
+        # Say it plainly rather than shipping a Studio whose Evidence view is silently
+        # empty for some networks: the fix is one command.
+        print(f"\n  Note: no data/evidence.json for {', '.join(missing)} — the drawer will "
+              f"have nothing to show for these.\n"
+              f"        Run: python Agent/shared/verify_evidence.py <network dir>")
+
     out_html = root / "Flash-P_Studio.html"
-    offline = write_studio(entries, out_html)
-    print(f"\n  Studio saved: {out_html}  ({'offline, self-contained' if offline else 'CDN libraries'})")
-    print(f"  {len(entries)} network(s) embedded.")
+    offline = write_studio(entries, out_html, papers, fulltexts)
+    size_mb = out_html.stat().st_size / 1e6
+    print(f"\n  Studio saved: {out_html}  ({'offline, self-contained' if offline else 'CDN libraries'}, {size_mb:.1f} MB)")
+    print(f"  {len(entries)} network(s) embedded; {len(papers)} paper(s), "
+          f"{len(fulltexts)} open-access full text(s).")
     if not args.no_open:
         try:
             webbrowser.open(out_html.resolve().as_uri())
