@@ -50,14 +50,19 @@ chat history in context.
 
 4. **Step 7 — STUDIO — run the script in THIS thread, after EXPORT.**
    ```bash
-   python Agent/shared/network_to_studio.py networks
+   python Agent/shared/network_to_studio.py networks --no-open
    ```
    Deterministic Python, **zero model tokens**, a few seconds. Rebuilds
    `networks/Flash-P_Studio.html` — one self-contained offline file with every network, its
-   evidence drawer and the simulator — and opens it in the browser so the run ends on something
-   the user can look at rather than a wall of paths. Add `--no-open` if a browser must not be
-   launched (headless, cron). This is the run's shareable artifact: it needs no server, no
+   evidence drawer and the simulator. This is the run's shareable artifact: it needs no server, no
    internet and no install, so it can be sent to a collaborator as-is.
+
+   Always pass `--no-open` here — a bare `webbrowser.open()` call from a tool invocation isn't
+   reliably visible to the user, so don't let the script guess. Instead, **ask**: "Open the Studio
+   now?" Once the user answers, on yes call `SendUserFile` with
+   `files: ["networks/Flash-P_Studio.html"]`, `display: "render"`, `status: "proactive"` so the
+   file is actually delivered, not just referenced by path. On no, just report the path — it's
+   already sitting there to double-click later.
 
 5. **Final report.** When Step 6 finishes, run
    `python Agent/shared/validate_schema.py --network . --quiet` and report: best method + accuracy +

@@ -336,6 +336,7 @@
     .ev-filter .pill.active .qt { color: var(--primary-fg); opacity: .8; }
     /* Separates the two independent choices: which kind of claim, which status. */
     .ev-filter .pill-sep { width: 1px; align-self: stretch; margin: 0 5px; background: var(--border); }
+    .ev-filter .ev-actions { margin-left: auto; display: flex; gap: 6px; }
     /* Species: italic because it is a binomial, and amber when the claim comes from an
        organism other than the one being modelled — the one case a reader must not miss. */
     .sp { font-style: italic; white-space: nowrap; }
@@ -1339,7 +1340,11 @@
         ['all', 'verified', 'repaired', 'quarantine'].map(function (k) {
           return '<span class="pill' + (evFilter === k ? ' active' : '') + '" data-f="' + k + '">' +
             (k === 'all' ? 'All' : STATUS_LABEL[k]) + '</span>';
-        }).join('');
+        }).join('') +
+        '<span class="ev-actions">' +
+        '<button class="btn" id="ev-dl-json" title="Download every edge and perturbation test for this network, with DOI/species/evidence, as JSON">&#8681; JSON</button>' +
+        '<button class="btn" id="ev-dl-csv" title="Download every edge and perturbation test for this network, with DOI/species/evidence, as CSV">&#8681; CSV</button>' +
+        '</span>';
       Array.prototype.forEach.call(fb.querySelectorAll('.pill'), function (b) {
         b.onclick = function () {
           if (b.hasAttribute('data-k')) evKind = b.getAttribute('data-k');
@@ -1347,6 +1352,10 @@
           renderEvidence();
         };
       });
+      // Always the full, unfiltered set for this network — a "download the database"
+      // action shouldn't quietly drop rows because a status pill happens to be active.
+      document.getElementById('ev-dl-json').onclick = function () { downloadEvidenceJson(net, idx); };
+      document.getElementById('ev-dl-csv').onclick = function () { downloadEvidenceCsv(net, idx); };
 
       var table = function (rows, kind) {
         if (!rows.length) return '';
@@ -1914,6 +1923,56 @@
     function download(name, dataUrl) {
       var a = document.createElement('a');
       a.href = dataUrl; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+    }
+    function downloadText(name, mime, text) {
+      download(name, 'data:' + mime + ';charset=utf-8,' + encodeURIComponent(text));
+    }
+
+    // ---- evidence database export (Evidence view "JSON" / "CSV" buttons) ----
+    function csvEscape(v) {
+      var s = v == null ? '' : String(v);
+      return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    }
+    // Just the papers this network's claims actually cite, keyed by DOI — same shape
+    // as evidence.json's `papers` map, which was built to mirror atlas.db's paper
+    // table, so this JSON is upsert-ready for Flash-P_DataBase without reshaping.
+    function evidencePapersFor(idx) {
+      var out = {}, seen = {};
+      function add(doi) {
+        if (!doi || seen[doi]) return;
+        seen[doi] = true;
+        if (PAPERS[doi]) out[doi] = PAPERS[doi];
+      }
+      idx.list.forEach(function (r) { add(r.doi); });
+      idx.plist.forEach(function (r) { add(r.doi); });
+      return out;
+    }
+    function downloadEvidenceJson(net, idx) {
+      var payload = {
+        network: net.slug, species: net.species,
+        papers: evidencePapersFor(idx),
+        edges: idx.list, perturbations: idx.plist
+      };
+      downloadText(net.slug + '_edges_perturbations.json', 'application/json',
+        JSON.stringify(payload, null, 2));
+    }
+    function downloadEvidenceCsv(net, idx) {
+      var cols = ['kind', 'source_or_gene', 'target_or_type', 'effect', 'doi', 'verification',
+                  'species', 'source_locator', 'confidence', 'evidence_sentence'];
+      var rows = [cols.join(',')];
+      idx.list.forEach(function (r) {
+        rows.push([
+          'edge', r.s, r.t, r.x < 0 ? 'inhibits' : 'activates', r.doi, r.verification,
+          r.species || r.sp || '', r.source_locator || '', r.confidence || '', r.evidence || ''
+        ].map(csvEscape).join(','));
+      });
+      idx.plist.forEach(function (r) {
+        rows.push([
+          'perturbation', r.g, r.pt, r.ed, r.doi, r.verification,
+          r.species || r.sp || '', r.source_locator || '', r.confidence || '', r.evidence || ''
+        ].map(csvEscape).join(','));
+      });
+      downloadText(net.slug + '_edges_perturbations.csv', 'text/csv', rows.join('\r\n'));
     }
 
     // ---- floating tooltips (position:fixed so they escape every overflow/clip container) ----
