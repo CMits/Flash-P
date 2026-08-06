@@ -78,3 +78,13 @@ README_files/
 Outcome/FLASH-P_VS_KG/KB_Cleaned/merged_arabidopsis_network/validation/ode_steady_state_dump.json
 Outcome/FLASH-P_VS_KG/KB_Cleaned/merged_arabidopsis_network/validation/rwr_steady_state_dump.json
 Outcome/FLASH-P_VS_KG/KB_Cleaned/merged_arabidopsis_network/validation/steady_state_dump.json
+
+# personally generated networks
+Flash-P_Plant/Claude/networks/
+Flash-P_Medical/Claude/networks/
+Flash-P_Animal/Claude/networks/
+
+# personal figure data
+Flash-P_Plant/Claude/Fig_Data/
+Flash-P_Medical/Claude/Fig_Data/
+Flash-P_Animal/Claude/Fig_Data/

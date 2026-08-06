@@ -39,6 +39,8 @@ NETWORKS = [
     ("OtherSpecies/sorghum_flowering_time_network", "Sorghum FT"),
     ("OtherSpecies/wheat_plant_height_network", "Wheat Height"),
     ("strawberry_flowering_network", "Strawberry FT"),
+    ("networks/Drought_Tolerance", "Drought Tolerance"),
+    ("networks/Relative_Electrolyte_Leakage", "Relative Electrolyte Leakage"),
 ]
 
 METHODS = [
@@ -61,8 +63,14 @@ def load_network_graph(net_path):
     node_ids = {n["id"] for n in d.get("nodes", [])}
     adj = {}
     for e in d.get("edges", []):
-        adj.setdefault(e["source"], []).append(e["target"])
-    pheno = next((n["id"] for n in d["nodes"] if n.get("type") == "PHENOTYPE"), None)
+        source = e.get("source", e.get("s"))
+        target = e.get("target", e.get("t"))
+        if source and target:
+            adj.setdefault(source, []).append(target)
+    pheno = next(
+        (n["id"] for n in d["nodes"] if n.get("type", n.get("ty")) in ("PHENOTYPE", "P")),
+        None,
+    )
     return adj, node_ids, pheno
 
 
@@ -88,15 +96,16 @@ def load_reconciled(net_path):
         return {}
     mapping = {}
     for p in d.get("perturbations", []):
-        exo = p.get("exogenous_supply") or {}
+        tid = p.get("test_id", p.get("id", ""))
+        exo = p.get("exogenous_supply", p.get("exo")) or {}
         if isinstance(exo, dict) and "node" in exo:
             exo = {exo["node"]: exo.get("value", exo.get("amount", 1.0))}
 
-        net_gene = p.get("network_gene") or []
+        net_gene = p.get("network_gene", p.get("ng")) or []
         if isinstance(net_gene, str):
             net_gene = [net_gene]
 
-        gm_dict = p.get("gene_modifiers")
+        gm_dict = p.get("gene_modifiers", p.get("m"))
         gm_singular = p.get("gene_modifier")
         if gm_dict and isinstance(gm_dict, dict) and len(gm_dict) > 0:
             mod_nodes = [n for n, m in gm_dict.items() if m != 1.0]
@@ -107,7 +116,7 @@ def load_reconciled(net_path):
 
         n_exo = len(exo) if isinstance(exo, dict) and "node" not in exo else (1 if exo else 0)
 
-        mapping[p.get("test_id", "")] = {
+        mapping[tid] = {
             "network_gene": net_gene,
             "mod_nodes": mod_nodes,
             "exogenous_supply": exo,
@@ -228,19 +237,24 @@ def export_edges(base, out_dir):
         d = load_json(base / net_str / "network" / "network.json")
         if not d:
             continue
-        node_types = {n["id"]: n.get("type", "") for n in d.get("nodes", [])}
+        node_types = {n["id"]: n.get("type", n.get("ty", "")) for n in d.get("nodes", [])}
         for e in d.get("edges", []):
             ev = e.get("evidence") or []
             dois = [x.get("doi", x.get("source", {}).get("doi", ""))
                     for x in ev if isinstance(x, dict)]
+            doi = e.get("doi", e.get("d", ""))
+            if doi:
+                dois.append(doi)
+            source = e.get("source", e.get("s", ""))
+            target = e.get("target", e.get("t", ""))
             rows.append({
                 "network": net_label,
-                "edge_id": e.get("edge_id", ""),
-                "source": e["source"],
-                "source_type": node_types.get(e["source"], ""),
-                "target": e["target"],
-                "target_type": node_types.get(e["target"], ""),
-                "sign": e.get("sign", ""),
+                "edge_id": e.get("edge_id", e.get("eid", "")),
+                "source": source,
+                "source_type": node_types.get(source, ""),
+                "target": target,
+                "target_type": node_types.get(target, ""),
+                "sign": e.get("sign", e.get("x", "")),
                 "effect": e.get("effect", ""),
                 "mechanism": e.get("mechanism", ""),
                 "n_evidence": len(ev),
@@ -352,12 +366,15 @@ def export_evidence_per_edge(base, out_dir):
                         doi = x["source"].get("doi", "")
                     if doi:
                         dois.add(doi)
+            doi = e.get("doi", e.get("d", ""))
+            if doi:
+                dois.add(doi)
             rows.append({
                 "network": net_label,
-                "edge_id": e.get("edge_id", ""),
-                "source": e.get("source", ""),
-                "target": e.get("target", ""),
-                "sign": e.get("sign", ""),
+                "edge_id": e.get("edge_id", e.get("eid", "")),
+                "source": e.get("source", e.get("s", "")),
+                "target": e.get("target", e.get("t", "")),
+                "sign": e.get("sign", e.get("x", "")),
                 "confidence": e.get("confidence", ""),
                 "in_model": e.get("in_model", ""),
                 "n_papers": len(dois),

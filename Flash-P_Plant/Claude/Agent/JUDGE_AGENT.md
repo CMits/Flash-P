@@ -130,12 +130,14 @@ This is the most labor-intensive phase. Do not shortcut it.
 
 For each major pathway in the phenotype's biology (you must enumerate these — they are not pre-listed), trace the cascade end-to-end and assess completeness:
 
-- Hormone biosynthesis: are biosynthetic genes covered?
-- Hormone signaling: is Perception Gate applied where applicable?
-- Hormone degradation: are degradation enzymes present (Motif 4)?
-- Transcriptional integration: are core integrator hubs (e.g., BRC1 for branching, FLC for flowering) covered?
+First identify the trait's **dominant regulatory modality/modalities** — not every trait is hormone-driven. Pick whichever apply (a trait may combine several): hormonal signaling, metabolic/biosynthetic flux, transport, transcriptional/photoperiodic, structural/developmental, defense/stress. Then audit the canonical arms of *whichever modalities apply* (the bullets below name the hormonal arm first, then its analog in other modalities):
+
+- Input / synthesis arm: are the source components covered? (hormone biosynthesis genes; the rate-limiting/committed-step enzymes of a biosynthetic pathway; the relevant transporters or sensors)
+- Perception / transduction arm: receptors + signal transducers where the modality has them (Perception Gate for hormones; substrate availability / allosteric regulators for enzymatic flux)
+- Turnover / negative arm: degradation enzymes, catabolic branches, or repressors (Motif 4)
+- Integration arm: are the core integrator hubs covered? Their *class is modality-specific* — a master TF (e.g. BRC1 branching, FLC flowering), a rate-limiting enzyme (committed biosynthetic step), or a key transporter, depending on the trait.
 - Environmental inputs: are all canonical environmental signals connected?
-- Crosstalk: are well-documented hormone crosstalk loops present (Motif 2/3)?
+- Crosstalk: are well-documented crosstalk loops present (hormone–hormone, hormone–metabolite, or pathway–pathway) (Motif 2/3)?
 
 ### Phase 5: Generate Suggestions
 
@@ -334,7 +336,13 @@ Score:
 
 **Why this dimension exists**: parsimony pressure can silently leave well-known major players under-represented. A network can pass §9.1 pathway_completeness while still having a critical hub like Sucrose, BRC1, or Auxin present at only 2-3 edges when 10-15 are curated. This rubric catches that.
 
-**The check**: identify the network's "key players" — typically 5-10 nodes that any specialist would name as primary regulators of the phenotype. Examples for shoot branching: BRC1 (master integrator), Strigolactone, Auxin, Cytokinin, Sucrose, ABA, the SL Perception Gate components (D14, MAX2, SMXL678). For flowering: FLC, FT, CO, FLD, etc. For each key player, compute:
+**The check**: identify the network's "key players" — typically 5-10 nodes that any specialist would name as primary regulators of *this* phenotype. The right players depend on the trait's regulatory modality, **not a fixed hormone list**. Examples by modality:
+- hormonal trait (shoot branching) → BRC1, Strigolactone, Auxin, Cytokinin, Sucrose, ABA, SL Perception Gate (D14, MAX2, SMXL678)
+- transcriptional/photoperiodic trait (flowering) → FLC, FT, CO, FLD
+- metabolic/biosynthetic trait (e.g. a pigment, metabolite, or cell-wall component) → the committed/rate-limiting enzymes and their direct transcriptional regulators
+- transport- or structural-dominated trait → the key transporters/channels or the meristem/cell-wall genes
+
+For each key player, compute:
 
 ```
 coverage_ratio = (edges in network involving this node) / (edges in curated_edges involving this node)
@@ -501,7 +509,7 @@ Bad: network has Sucrose (or any major hormone, metabolite, or master TF) with 4
 
 Why wrong: parsimony pressure makes it easy to under-represent hubs. A network can pass overall pathway_completeness while silently treating a primary regulator as peripheral — and the simulation will then mispredict every perturbation involving that player. This was the iter 3 failure mode that required user intervention to catch.
 
-Fix: in Phase 1 step 5, ALWAYS compute per-node coverage ratios. Any node with ≥5 curated edges and <0.30 coverage ratio is a §9.11 KEY PLAYER UNDER-REPRESENTATION flag and gets at least a MEDIUM priority suggestion. Do not approve the network if a known major regulator (use field knowledge — for plant hormones: Auxin, SL, CK, GA, ABA, JA, ethylene, BR; for sugar/metabolite: Sucrose, T6P; for master TFs of the phenotype: BRC1 for branching, FLC for flowering, etc.) is under-represented without an explicit documented reason.
+Fix: in Phase 1 step 5, ALWAYS compute per-node coverage ratios. Any node with ≥5 curated edges and <0.30 coverage ratio is a §9.11 KEY PLAYER UNDER-REPRESENTATION flag and gets at least a MEDIUM priority suggestion. Do not approve the network if a known major regulator is under-represented without an explicit documented reason. Use field knowledge to name the major regulators **for this trait's modality** — do not default to a hormone checklist: hormonal traits (Auxin, SL, CK, GA, ABA, JA, ethylene, BR); metabolite/sugar-driven traits (Sucrose, T6P, or the relevant intermediate); biosynthetic-flux traits (the committed/rate-limiting enzymes); transport traits (the key transporters); plus the trait's integrator hub whatever its class (master TF e.g. BRC1/FLC, rate-limiting enzyme, or hub transporter).
 
 ---
 

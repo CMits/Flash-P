@@ -308,7 +308,7 @@ Update `refinement_report.json` with iteration number, all 3 accuracies, fix det
 ```json
 {
   "metadata": {
-    "flash_p_version": "1.0", "phenotype": "shoot_branching",
+    "flash_p_version": "light-1.0-debiasing", "build_variant": "debiasing", "phenotype": "shoot_branching",
     "species": "Arabidopsis thaliana", "created": "2026-04-10",
     "iterations_run": 2, "best_iteration": 1
   },

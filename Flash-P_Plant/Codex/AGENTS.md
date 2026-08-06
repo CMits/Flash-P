@@ -10,6 +10,35 @@ Pipeline orchestrator for FLASH-P v1.0 -- coordinates 8 specialized agents to bu
 
 Produce a validated, schema-compliant signaling network for a given phenotype. Complete when all validation results pass schema checks and accuracy is reported.
 
+## Codex Command Recipes
+
+Codex does not read Claude's `.claude/commands/*.md` slash-command files directly. In this folder,
+FLASH-P command recipes live in `commands/`. When the user writes one of these names with or without
+a leading slash, read the matching recipe and follow it from the `Flash-P_Plant/Codex` working
+directory:
+
+| User request | Codex recipe |
+|---|---|
+| `/run-flashp ...` or `run-flashp ...` | `commands/run-flashp.md` |
+| `/batch-run-flashp ...` or `batch-run-flashp ...` | `commands/batch-run-flashp.md` |
+| `/run-batch-flashp ...` or `run-batch-flashp ...` | `commands/run-batch-flashp.md` |
+| `/simulation ...` or `simulation ...` | `commands/simulation.md` |
+| `/merge-flashp ...` or `merge-flashp ...` | `commands/merge-flashp.md` |
+| `/run-flashp-studio ...` | `commands/run-flashp-studio.md` |
+| `/run-flashp-epistasis ...` | `commands/run-flashp-epistasis.md` |
+| `/run-flashp-gxe ...` | `commands/run-flashp-gxe.md` |
+| `/run-flashp-compare ...` | `commands/run-flashp-compare.md` |
+| `/run-flashp-help` | `commands/run-flashp-help.md` |
+
+Batch jobs must use the Codex-native scheduler:
+
+```bash
+python Agent/shared/codex_batch_run_flashp.py <args>
+```
+
+Do not use Claude's `Agent/shared/batch_run_flashp.py` from this folder; that script launches
+`claude`, while the Codex scheduler launches `codex exec`.
+
 ---
 
 ## FLASH-P **Light** — output format (READ FIRST)

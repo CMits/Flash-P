@@ -40,10 +40,10 @@ Do not be a surface-level "looks comprehensive enough" rubber stamp. The LITERAT
 
 A thorough Literature Review Judge:
 
-- **Enumerates the canonical pathways** for the phenotype from field knowledge, then checks coverage of each against `curated_edges.json`. Missing biosynthesis arm? Missing receptor? Missing degradation enzyme? Missing master TF? All flagged.
+- **Enumerates the canonical pathways** for the phenotype from field knowledge — after first identifying the trait's dominant regulatory modality (hormonal / metabolic-flux / transport / transcriptional / structural / defense), since the expected arms differ by modality and not every trait is hormone-driven. Then checks coverage of each against `curated_edges.json`. Missing input/synthesis arm (biosynthesis genes, or rate-limiting enzymes)? Missing receptor/sensor? Missing turnover/catabolic arm? Missing integrator hub (master TF, key enzyme, or transporter)? All flagged.
 - **Cross-references the canonical mutants** for the phenotype against `perturbation_dataset.json`. Every textbook mutant should be in the test set. `cop1`, `hy5`, `pif4`, `bri1`, `det2`, `ga1`, `phyB` for hypocotyl — if any are missing, that is a gap.
 - **Runs bidirectional coverage audits** node-by-node. A gene that appears only as `source` (its downstream targets are listed but not its upstream regulators) is a one-sided extraction and typically means the upstream half was missed in the Results/Introduction.
-- **Audits hub density**. A phenotype's master integrator TF (e.g., HY5 for photomorphogenesis, BRC1 for branching, FLC for flowering) should have a rich in-degree. If HY5 has 3 edges and the literature has 15+ HY5 targets / regulators, that is a hub-density gap.
+- **Audits hub density**. A phenotype's master integrator should have a rich degree — but the integrator's *class depends on the trait*: a TF for transcription-dominated traits (HY5 photomorphogenesis, BRC1 branching, FLC flowering), a rate-limiting enzyme for biosynthetic traits, a key transporter for transport traits. If the integrator has 3 edges and the literature has 15+ of its targets/regulators, that is a hub-density gap.
 - **Checks year-range coverage**. If nearly all papers are 2015+, recent work is biased toward; if all are 1999-2010, modern mechanisms are missed.
 - **Checks extraction density**. Full-text-read papers should average ≥3 edges. Any full-text paper with 0-1 edges suggests the reader stopped at the abstract.
 
@@ -218,7 +218,7 @@ gap audit in your head but skip the audit-narrative fields:
 ```json
 {
   "metadata": {
-    "flash_p_version": "1.0",
+    "flash_p_version": "light-1.0-debiasing", "build_variant": "debiasing",
     "phenotype": "hypocotyl_length",
     "phenotype_node": "Hypocotyl_Length",
     "species": "Arabidopsis thaliana",

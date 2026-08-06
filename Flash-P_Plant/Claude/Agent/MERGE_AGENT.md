@@ -39,6 +39,7 @@ Produce a merged network that preserves all individual trait predictions while e
 | Merge log | `{species}/merged_{species}_network/data/merge_log.json` | `MergeLogFile` | same |
 | Accumulated perturbations | `{species}/merged_{species}_network/data/reconciled_perturbation_dataset.json` | `ReconciledPerturbationFile` | same |
 | Pleiotropic perturbations | `{species}/merged_{species}_network/data/pleiotropic_perturbation_dataset.json` | `PleiotropicPerturbationFile` | same |
+| Cytoscape export | `{species}/merged_{species}_network/network/cytoscape/` | GraphML/SIF/tables | `python Agent/shared/network_to_cytoscape.py <merged_network>` |
 
 ## Workflow (numbered steps)
 
@@ -98,7 +99,20 @@ Pleiotropic tests target genes that affect MULTIPLE traits:
 2. Run validators on pleiotropic tests separately
 3. Compare: merged accuracy vs individual accuracies (expect slight decrease)
 
-### Step 8: Write merge log
+### Step 8: Export Cytoscape files
+Run:
+
+```bash
+python Agent/shared/network_to_cytoscape.py <merged_network>
+```
+
+Verify that `network/cytoscape/` contains:
+- `network.graphml`
+- `network.sif`
+- `node_attributes.txt`
+- `edge_attributes.txt`
+
+### Step 9: Write merge log
 Record in merge_log.json:
 - source_networks: list of input networks with stats
 - normalization_map: all name changes
@@ -190,9 +204,10 @@ Record in merge_log.json:
 - [ ] Merged network has no disconnected nodes
 - [ ] All edges have sign (1 or -1), never missing
 - [ ] Merged accuracy within 5% of mean individual accuracy
+- [ ] `network/cytoscape/` exists with GraphML, SIF, node attributes, and edge attributes
 
 ## Handoff
 When complete, the merged network is ready for final validation and figure generation.
-Files produced: merged network.json, algebraic_equations.json, merge_log.json, reconciled_perturbation_dataset.json, pleiotropic_perturbation_dataset.json
+Files produced: merged network.json, algebraic_equations.json, merge_log.json, reconciled_perturbation_dataset.json, pleiotropic_perturbation_dataset.json, and network/cytoscape exports.
 
 *MERGE AGENT v1.0 -- Part of Flash-P v1.0*

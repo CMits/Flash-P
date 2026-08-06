@@ -69,6 +69,10 @@ def export_edges(data: Dict, output_path: Path):
             ev_list = edge.get('evidence', [])
             ev = ev_list[0] if isinstance(ev_list, list) and ev_list else (ev_list if isinstance(ev_list, dict) else {})
             src = ev.get('source', {}) if isinstance(ev, dict) else {}
+            doi = edge.get('doi', '') or (ev.get('doi', '') if isinstance(ev, dict) else '') or src.get('doi', '')
+            species_validated = edge.get('species_validated', [])
+            if isinstance(species_validated, list):
+                species_validated = ','.join(species_validated)
 
             writer.writerow({
                 'source': edge.get('source', ''),
@@ -79,14 +83,14 @@ def export_edges(data: Dict, output_path: Path):
                 'edge_type': edge.get('edge_type', ''),
                 'confidence': edge.get('confidence', ''),
                 'mechanism': edge.get('mechanism', ''),
-                'doi': src.get('doi', ''),
+                'doi': doi,
                 'paper_title': src.get('title', ''),
                 'authors': src.get('authors', ''),
                 'year': src.get('year', ''),
                 'journal': src.get('journal', ''),
                 'evidence_sentence': ev.get('evidence_sentence', ''),
                 'verification': src.get('verification', ''),
-                'species_validated': ','.join(edge.get('species_validated', [])),
+                'species_validated': species_validated,
             })
 
     print(f"  Exported {len(edges)} edges to {output_path.name}")
@@ -98,8 +102,10 @@ def export_perturbations(data: Dict, output_path: Path):
     if not perts:
         return
 
-    fieldnames = ['test_id', 'gene', 'perturbation_type', 'gene_modifier',
-                  'exogenous_node', 'exogenous_value', 'comparison_baseline',
+    fieldnames = ['test_id', 'gene', 'perturbation_type', 'network_gene',
+                  'gene_modifier', 'gene_modifiers', 'exogenous_node',
+                  'exogenous_value', 'exogenous_supply', 'comparison_baseline',
+                  'reconciliation_type',
                   'phenotype_node', 'expected_direction', 'expected_magnitude',
                   'doi', 'paper_title', 'authors', 'year', 'journal',
                   'evidence_sentence', 'verification',
@@ -110,23 +116,41 @@ def export_perturbations(data: Dict, output_path: Path):
         writer.writeheader()
         for p in perts:
             exo = p.get('exogenous_supply', {}) or {}
+            gene_modifiers = p.get('gene_modifiers', {}) or {}
+            if isinstance(exo, dict) and 'node' in exo:
+                exogenous_node = exo.get('node', '')
+                exogenous_value = exo.get('value', '')
+            elif isinstance(exo, dict):
+                exogenous_node = ';'.join(str(k) for k in exo.keys())
+                exogenous_value = ';'.join(str(v) for v in exo.values())
+            else:
+                exogenous_node = ''
+                exogenous_value = ''
             # Extract evidence from first entry
             ev_list = p.get('evidence', [])
             ev = ev_list[0] if isinstance(ev_list, list) and ev_list else {}
             src = ev.get('source', {}) if isinstance(ev, dict) else {}
+            if isinstance(ev, dict) and not src:
+                src = ev
+            doi = p.get('doi', '') or (ev.get('doi', '') if isinstance(ev, dict) else '') or src.get('doi', '')
+            metadata = data.get('metadata', {}) if isinstance(data.get('metadata'), dict) else {}
 
             writer.writerow({
                 'test_id': p.get('test_id', ''),
                 'gene': p.get('gene', ''),
                 'perturbation_type': p.get('perturbation_type', ''),
+                'network_gene': ';'.join(p.get('network_gene', [])) if isinstance(p.get('network_gene'), list) else p.get('network_gene', ''),
                 'gene_modifier': p.get('gene_modifier', ''),
-                'exogenous_node': exo.get('node', '') if isinstance(exo, dict) else '',
-                'exogenous_value': exo.get('value', '') if isinstance(exo, dict) else '',
+                'gene_modifiers': json.dumps(gene_modifiers, sort_keys=True) if gene_modifiers else '',
+                'exogenous_node': exogenous_node,
+                'exogenous_value': exogenous_value,
+                'exogenous_supply': json.dumps(exo, sort_keys=True) if exo else '',
                 'comparison_baseline': p.get('comparison_baseline', ''),
-                'phenotype_node': p.get('phenotype_node', ''),
+                'reconciliation_type': p.get('reconciliation_type', ''),
+                'phenotype_node': p.get('phenotype_node', '') or metadata.get('phenotype_node', ''),
                 'expected_direction': p.get('expected_direction', ''),
                 'expected_magnitude': p.get('expected_magnitude', ''),
-                'doi': src.get('doi', ''),
+                'doi': doi,
                 'paper_title': src.get('title', ''),
                 'authors': src.get('authors', ''),
                 'year': src.get('year', ''),
@@ -134,7 +158,7 @@ def export_perturbations(data: Dict, output_path: Path):
                 'evidence_sentence': ev.get('evidence_sentence', ''),
                 'verification': src.get('verification', ''),
                 'evidence_quality': p.get('evidence_quality', ''),
-                'species': p.get('species', ''),
+                'species': p.get('species', '') or metadata.get('species', ''),
                 'notes': p.get('notes', ''),
             })
 
@@ -155,7 +179,7 @@ def export_equations(data: Dict, output_path: Path, kind: str = "algebraic"):
         for eq in equations:
             writer.writerow({
                 'node': eq.get('node', ''),
-                'node_type': eq.get('node_type', ''),
+                'node_type': eq.get('node_type', '') or eq.get('type', ''),
                 'activators': ','.join(eq.get('activators', [])),
                 'inhibitors': ','.join(eq.get('inhibitors', [])),
                 'formula': eq.get('formula', ''),
@@ -364,6 +388,15 @@ def _load_reconciled(network_dir: Path) -> Dict:
         return {}
     import light_io  # Light: expand short-key/TOON reconciled -> rich
     d = light_io.load(str(recon_path))
+    raw_dois: Dict[str, str] = {}
+    raw_path = network_dir / "data" / "perturbation_dataset.json"
+    if raw_path.exists():
+        raw = light_io.load(str(raw_path))
+        raw_dois = {
+            p.get("test_id", ""): p.get("doi", "")
+            for p in raw.get("perturbations", [])
+            if p.get("test_id")
+        }
     mapping: Dict[str, Dict] = {}
     for p in d.get("perturbations", []):
         tid = p.get("test_id", "")
@@ -389,6 +422,7 @@ def _load_reconciled(network_dir: Path) -> Dict:
             "reconciliation_type": p.get("reconciliation_type", ""),
             "expected_magnitude": p.get("expected_magnitude", ""),
             "notes": p.get("notes", ""),
+            "doi": p.get("doi", "") or raw_dois.get(tid, ""),
         }
     return mapping
 
@@ -507,7 +541,7 @@ def export_master_test_level(network_dir: Path, output_path: Path):
                 "path_length": r.get("path_length", ""),
                 "path": path_str,
                 "phenotype_node": r.get("phenotype_node", ""),
-                "evidence_doi": r.get("evidence_doi", ""),
+                "evidence_doi": r.get("evidence_doi", "") or m.get("doi", ""),
             })
 
     if not rows:
@@ -849,20 +883,34 @@ def main():
     # Table S3: Reconciled perturbations
     recon_path = network_dir / 'data' / 'reconciled_perturbation_dataset.json'
     if recon_path.exists():
-        with open(recon_path, 'r', encoding='utf-8') as f:
-            export_perturbations(json.load(f), output_dir / 'Table_S3_reconciled_perturbations.csv')
+        import light_io
+        recon_data = light_io.load(str(recon_path))
+        raw_dois: Dict[str, str] = {}
+        if pert_path.exists():
+            raw_data = light_io.load(str(pert_path))
+            raw_dois = {
+                p.get('test_id', ''): p.get('doi', '')
+                for p in raw_data.get('perturbations', [])
+                if p.get('test_id')
+            }
+        for p in recon_data.get('perturbations', []):
+            doi = p.get('doi', '') or raw_dois.get(p.get('test_id', ''), '')
+            if doi:
+                p['doi'] = doi
+                p.setdefault('evidence', [{'doi': doi}])
+        export_perturbations(recon_data, output_dir / 'Table_S3_reconciled_perturbations.csv')
 
     # Table S4: Algebraic equations
     alg_path = network_dir / 'network' / 'algebraic_equations.json'
     if alg_path.exists():
-        with open(alg_path, 'r', encoding='utf-8') as f:
-            export_equations(json.load(f), output_dir / 'Table_S4_algebraic_equations.csv', 'algebraic')
+        import light_io
+        export_equations(light_io.load(str(alg_path)), output_dir / 'Table_S4_algebraic_equations.csv', 'algebraic')
 
     # Table S5: ODE equations
     ode_path = network_dir / 'network' / 'ode_equations.json'
     if ode_path.exists():
-        with open(ode_path, 'r', encoding='utf-8') as f:
-            export_equations(json.load(f), output_dir / 'Table_S5_ode_equations.csv', 'ODE')
+        import light_io
+        export_equations(light_io.load(str(ode_path)), output_dir / 'Table_S5_ode_equations.csv', 'ODE')
 
     # Table S7: Validation results for ALL THREE methods
     import shutil

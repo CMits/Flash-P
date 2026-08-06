@@ -66,14 +66,14 @@ If the LITERATURE REVIEW agent has a `papers_read.json`, start from those papers
 
 Use at least 5 WebSearch queries specifically targeting experiments:
 
-**Keyword strategy** (examples — adapt):
+**Keyword strategy** (examples — adapt to the trait's dominant modality):
 - `"{species} {phenotype} mutant phenotype knockout overexpression"`
-- `"{gene_family} mutant {species} branching/growth phenotype"`
-- `"{hormone} treatment {phenotype} {species} experiment"`
+- `"{gene_family} mutant {species} {phenotype} phenotype"`
+- `"{perturbagen} treatment {phenotype} {species} experiment"` — `{perturbagen}` = whatever perturbs THIS trait's modality: a hormone/agonist (signaling), a precursor / pathway-inhibitor / substrate (metabolic), or a nutrient / light / temperature shift (environmental)
 - `"rescue experiment {species} {phenotype}"`
 - `"double mutant epistasis {phenotype} {species}"`
 - `"environmental stress {phenotype} {species}"`
-- `"{species} {phenotype} GR24 NPA BAP IAA ABA treatment"`
+- `"{species} {phenotype} {modality_treatments} treatment"` — `{modality_treatments}` = the standard perturbagens for the modality, e.g. GR24/NPA/BAP/IAA/ABA for hormone signaling; precursor feeding / pathway inhibitors / sucrose / light shift for metabolic-biosynthetic
 - `"site:pmc.ncbi.nlm.nih.gov {species} {gene} mutant {phenotype}"`
 
 **Year-range coverage**: Same as LITERATURE REVIEW agent — ensure coverage from 1999-2026, not just one era. Many classic mutant characterizations are from 2000-2010.
@@ -153,7 +153,7 @@ A validation hook checks every JSON file you write. Files that don't match the s
 ```json
 {
   "metadata": {
-    "flash_p_version": "1.0",
+    "flash_p_version": "light-1.0-debiasing", "build_variant": "debiasing",
     "phenotype": "flowering_time",
     "species": "Arabidopsis thaliana",
     "created": "2026-04-14",
@@ -192,7 +192,7 @@ A validation hook checks every JSON file you write. Files that don't match the s
 ```json
 {
   "metadata": {
-    "flash_p_version": "1.0",
+    "flash_p_version": "light-1.0-debiasing", "build_variant": "debiasing",
     "phenotype": "shoot_branching",
     "species": "Arabidopsis thaliana",
     "created": "2026-04-14",

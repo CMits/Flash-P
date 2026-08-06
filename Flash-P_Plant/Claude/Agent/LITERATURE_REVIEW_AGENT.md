@@ -146,16 +146,19 @@ Use MULTIPLE search sources to find ALL papers. Do NOT rely solely on PMC.
 - `"Google Scholar {phenotype} {species} {keyword}"` — broadest academic search
 
 ### Keyword strategy (examples — adapt to phenotype):
+**First decide the trait's dominant regulatory modality/modalities** (hormonal / metabolic-flux / transport / transcriptional / structural-developmental / defense-stress) and weight the seeds toward it — do NOT assume every trait is hormone-driven. A pigment, metabolite-content, or cell-wall trait is mostly enzymatic; a nutrient-content trait is often transport-driven; a flowering/architecture trait is TF/hormonal.
 - Core: `"{phenotype} {species} regulation review"`
-- Pathway-specific: `"{hormone} signaling {phenotype} {species}"` (one per hormone)
+- Pathway-specific (hormonal): `"{hormone} signaling {phenotype} {species}"` (one per relevant hormone)
+- Pathway-specific (metabolic/biosynthetic): `"{pathway} biosynthesis {phenotype} {species}"`, `"rate-limiting enzyme {pathway} {species}"`
+- Pathway-specific (transport): `"{substrate} transporter {phenotype} {species}"`
 - Gene-specific: `"{gene_family} {species} {phenotype} mutant"` (one per gene family)
-- Mechanism: `"hormone crosstalk {phenotype} {species}"`
-- Receptors: `"{hormone} receptor {species} signaling"`
+- Mechanism: `"{phenotype} {species} crosstalk"` (use `"hormone crosstalk …"` only if the trait is hormonal)
+- Receptors / sensors: `"{hormone} receptor {species} signaling"` / `"{signal} sensor {species}"`
 - Transcription factors: `"transcription factor {phenotype} {species}"`
-- Environmental: `"light nitrogen phosphate {phenotype} {species}"`
+- Environmental: `"light nitrogen phosphate temperature {phenotype} {species}"`
 - Time ranges: `"1999-2010"` AND `"2010-2020"` AND `"2020-2026"`
 - Experiment-focused: `"{species} {gene} knockout overexpression {phenotype} mutant"`
-- Cross-species: `"rice tiller pea branching {keyword}"` (for conserved pathways)
+- Cross-species (conserved pathways): `"{ortholog/gene_family} {related_species} {phenotype_analog}"` — pick the species + analogous trait that fit YOUR phenotype (e.g. tillering → rice/maize; fruit traits → tomato; grain composition → wheat/maize), not a fixed pair
 
 **Year-range coverage**: Papers MUST span 1999-2026. If any 5-year range is empty, do a targeted search for it.
 
@@ -204,13 +207,20 @@ Use MULTIPLE search sources to find ALL papers. Do NOT rely solely on PMC.
 result snippet; the full-text URL tables above are an **off-by-default escape hatch only** (rare,
 explicit cases). The "read N papers" guidance below does NOT apply to Light.
 
-### Scale guidance (Light) — verification searches, not full-text reads:
-- Well-studied phenotype (shoot branching, flowering time): ~80-120 edges, ~50-80 tests, ~30-40 verification searches
+### Scale guidance (Light) — verification searches, not full-text reads.
+**Network size scales with the trait's regulatory breadth, not its fame.** A trait governed by
+multi-hormone crosstalk (branching, flowering time) is intrinsically larger than one governed by a
+single biosynthetic, transport, or TF-cascade pathway (a pigment, a nutrient-content trait) — the
+latter is often *well-studied yet compact*. Calibrate to the biology you actually find; never pad a
+compact pathway with marginal edges just to hit a count.
+- Broad & well-studied (multi-pathway / hormone crosstalk): ~80-120 edges, ~50-80 tests, ~30-40 searches
+- Focused & well-studied (single biosynthetic / transport / TF cascade): ~40-70 edges, ~30-50 tests, ~20-30 searches
 - Moderately studied: ~50-80 edges, ~40-60 tests, ~20-30 searches
 - Niche phenotype: fewer; flag unconfirmed canonical edges as `literature_gap` rather than WebFetching them
 
-### Expected network sizes (NOT thresholds, but if far below, the network is incomplete):
-- Well-studied: 40-80+ nodes, 80-200+ edges
+### Expected network sizes (NOT thresholds; modality-dependent — a focused biosynthetic/transport trait is complete at the low end):
+- Broad & well-studied: 40-80+ nodes, 80-200+ edges
+- Focused & well-studied: 20-45 nodes, 40-100 edges
 - Moderately studied: 20-50 nodes, 40-100 edges
 - Niche: 10-30 nodes, 20-60 edges
 
@@ -225,33 +235,37 @@ section; the edge/perturbation extraction rules below still apply to what you co
 
 ## Network Construction — Think Like a World-Class Plant Biologist
 
-**Your role during edge extraction and compilation:** You are a leading plant molecular biologist who has spent years studying this phenotype. You know every signaling pathway, every receptor, every intermediate step. When you read a paper and it mentions "strigolactone inhibits branching", you don't just write one edge — you think about the FULL molecular cascade: which enzymes make SL, which receptor perceives it, which proteins transduce the signal, which TFs respond, and how they affect the phenotype. You include ALL of those steps because that's what makes the network mechanistically accurate.
+**Your role during edge extraction and compilation:** You are a leading plant molecular biologist who has spent years studying this phenotype — *whatever its biology is*. First identify the trait's **dominant regulatory modality** (hormonal signaling / metabolic-biosynthetic flux / transport / transcriptional-photoperiodic / structural-developmental / defense-stress); most traits are governed by one or two. You know every step of that modality — every enzyme, receptor, transporter, transducer, and TF. When a paper states a headline relationship ("strigolactone inhibits branching", "a MYB activates anthocyanin biosynthesis", "a transporter sets grain protein content"), you don't write one edge — you reconstruct the FULL molecular cascade behind it (production → perception/transport → transduction → transcriptional output → phenotype, as the modality dictates), because that is what makes the network mechanistically accurate.
 
-**Your instinct should be to INCLUDE, not to exclude.** Every gene, receptor, transducer, and TF that the literature describes as part of the mechanism belongs in the network. If you're unsure whether to include something, include it — a slightly larger network with full mechanistic resolution is far better than a small network that misses pathways.
+**Your instinct should be to INCLUDE, not to exclude.** Every component the literature describes as part of the mechanism belongs in the network. If you're unsure whether to include something, include it — a slightly larger network with full mechanistic resolution is far better than a small one that misses pathway steps.
 
 ### How to think about building the network
 
-When you extract edges from each paper, ask yourself:
+When you extract edges from each paper, ask yourself (substitute your trait's own modality for the illustrations):
 
 1. **"What are ALL the molecular steps between this input and this output?"**
-   - If a paper says "auxin promotes SL biosynthesis" → include Auxin → CCD7, Auxin → CCD8 (the actual gene targets), not just Auxin → Strigolactone
+   - Hormonal: "auxin promotes SL biosynthesis" → Auxin → CCD7, Auxin → CCD8 (the actual gene targets), not just Auxin → Strigolactone
+   - Metabolic: "a MYB drives pigment accumulation" → MYB → CHS, MYB → DFR, MYB → UFGT (the committed enzymes), not just MYB → Anthocyanin
 
-2. **"Is the receptor in the network?"**
-   - Every hormone needs its receptor: D14 for SL, TIR1 for auxin, AHK for CK
-   - Every environment needs its sensor: phyB for light, nutrient sensors
+2. **"Is the perception / entry step in the network?"**
+   - Hormone → receptor: D14 for SL, TIR1 for auxin, AHK for CK
+   - Environment → sensor: phyB/cry for light, a Ca²⁺/kinase module for cold, nutrient sensors for N/P
+   - Metabolite or ion → the transporter or rate-limiting enzyme that gates flux into the pathway
 
-3. **"Are the signal transduction intermediates in the network?"**
-   - MAX2 between D14 and SMXL, AHP between AHK and ARR, Aux/IAA between TIR1 and ARF
+3. **"Are the transduction / committed-step intermediates in the network?"**
+   - Signaling: MAX2 between D14 and SMXL, AHP between AHK and ARR, Aux/IAA between TIR1 and ARF
+   - Biosynthetic: the rate-limiting enzyme(s) between precursor and product (e.g. PSY for carotenoids, F3H/DFR for flavonoids)
 
-4. **"Are the transcription factors in the network?"**
-   - BRC1, ARR type-B, ARF, SPL9, HB21/40/53 — these are where the regulatory logic happens
+4. **"Are the transcription factors / master regulators in the network?"**
+   - Signaling: BRC1, type-B ARR, ARF, SPL9, HB21/40/53
+   - Metabolic / structural: the MBW complex (MYB–bHLH–WD40) and its repressors (MYBL2, CPC) — this is where the regulatory logic happens
 
 5. **"Are there feedback loops I should complete?"**
-   - Auxin → SL biosynthesis → SL → PIN1 depletion → reduced auxin transport → reduced auxin
-   - CK signaling → type-A ARR → negative feedback on CK signaling
+   - Hormonal: Auxin → SL biosynthesis → SL → PIN1 depletion → reduced auxin transport → reduced auxin; CK signaling → type-A ARR → negative feedback on CK signaling
+   - Transcriptional: MBW → pigment AND MBW → MYBL2 (repressor) → negative feedback on the MBW complex
 
-6. **"Are there secondary pathways connected to the phenotype?"**
-   - GA, ethylene, ABA, meristem initiation genes — if any paper links them, include them
+6. **"Are there secondary / cross-talking pathways connected to the phenotype?"**
+   - Any other modality a paper links to the trait — a second hormone, an environmental input (light, N/P, temperature), a competing biosynthetic branch, GA/ethylene/ABA — if a paper links it, include it
 
 ### BIDIRECTIONAL EXTRACTION (critical — most-missed step)
 

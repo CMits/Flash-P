@@ -13,6 +13,14 @@ The three folders are identical except the orchestrator filename:
 
 ---
 
+## Codex commands
+
+Codex command-style workflows live in **`Codex/commands/`**. Open Codex in `Codex/` and ask for
+`/run-flashp`, `/batch-run-flashp`, `/simulation`, `/merge-flashp`, `/run-flashp-studio`,
+`/run-flashp-epistasis`, `/run-flashp-gxe`, `/run-flashp-compare`, or `/run-flashp-help`; `AGENTS.md`
+maps those names to the matching recipe. The Codex batch scheduler is
+`Codex/Agent/shared/codex_batch_run_flashp.py` and launches `codex exec` sessions.
+
 ## How to run
 
 1. Open your tool in the matching folder above.

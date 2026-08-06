@@ -33,6 +33,8 @@ NETWORKS = [
     ("OtherSpecies/sorghum_flowering_time_network", "Sorghum FT", "Sorghum bicolor"),
     ("OtherSpecies/wheat_plant_height_network", "Wheat Height", "Triticum aestivum"),
     ("strawberry_flowering_network", "Strawberry FT", "Fragaria vesca / Fragaria x ananassa"),
+    ("networks/Drought_Tolerance", "Drought Tolerance", "Sorghum bicolor"),
+    ("networks/Relative_Electrolyte_Leakage", "Relative Electrolyte Leakage", "Sorghum bicolor"),
 ]
 
 METHODS = [
@@ -84,20 +86,20 @@ def load_reconciled(net_path):
         return {}
     mapping = {}
     for p in d.get("perturbations", []):
-        tid = p.get("test_id", "")
+        tid = p.get("test_id", p.get("id", ""))
 
         # network_gene: always list
-        net_gene = p.get("network_gene") or []
+        net_gene = p.get("network_gene", p.get("ng")) or []
         if isinstance(net_gene, str):
             net_gene = [net_gene]
 
         # gene_modifiers: always dict
-        gm = p.get("gene_modifiers") or {}
+        gm = p.get("gene_modifiers", p.get("m")) or {}
         if not isinstance(gm, dict):
             gm = {}
 
         # exogenous_supply: always flat dict {node: value}
-        exo = p.get("exogenous_supply") or {}
+        exo = p.get("exogenous_supply", p.get("exo")) or {}
         if isinstance(exo, dict) and "node" in exo:
             exo = {exo["node"]: exo.get("value", exo.get("amount", 1.0))}
 
@@ -113,7 +115,7 @@ def load_reconciled(net_path):
             "n_gene_mods": len(mod_nodes),
             "exogenous_supply": exo,
             "n_exo": n_exo,
-            "reconciliation_type": p.get("reconciliation_type", ""),
+            "reconciliation_type": p.get("reconciliation_type", p.get("rt", "")),
             "expected_magnitude": p.get("expected_magnitude", ""),
             "notes": p.get("notes", ""),
         }
