@@ -15,7 +15,7 @@ from typing import Dict, List, Optional
 
 from pydantic import Field
 
-from .common import Direction, FlashPMetadata, NodeType, SlimModel
+from .common import Direction, DoiStr, FlashPMetadata, NodeType, SlimModel
 
 
 # ============================================================================
@@ -27,7 +27,13 @@ class CuratedEdge(SlimModel):
     source: str = Field(alias="s")
     target: str = Field(alias="t")
     sign: int = Field(alias="x", description="1 = activation, -1 = inhibition")
-    doi: str = Field(default="", alias="d", description="Primary supporting DOI")
+    doi: DoiStr = Field(default="", alias="d", description="Primary supporting DOI")
+    # Written by Step 1.6, and only when the claim could NOT be grounded ("q"). Absent
+    # means grounded — which is the common case, so the Light file stays lean and the
+    # field's mere presence is the signal the BUILDER acts on. Never hand-edit it.
+    verification: str = Field(
+        default="", alias="v",
+        description="'q' = quarantine: Step 1.6 found no paper stating this claim")
 
 
 class CuratedEdgesMetadata(FlashPMetadata):
@@ -52,7 +58,11 @@ class RawPerturbation(SlimModel):
     perturbation_type: str = Field(alias="pt")
     expected_direction: Direction = Field(alias="ed")
     species: str = Field(default="", alias="sp")
-    doi: str = Field(default="", alias="d")
+    doi: DoiStr = Field(default="", alias="d")
+    # See CuratedEdge.verification — same meaning, same "absent = grounded" convention.
+    verification: str = Field(
+        default="", alias="v",
+        description="'q' = quarantine: Step 1.6 found no paper stating this claim")
 
 
 class PerturbationDatasetMetadata(FlashPMetadata):

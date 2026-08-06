@@ -33,13 +33,16 @@ import toon_codec
 # ---------------------------------------------------------------------------
 # lexicon (long form for the legacy scripts) — see LEXICON.md
 # ---------------------------------------------------------------------------
-_EDGE = {"eid": "edge_id", "s": "source", "t": "target", "x": "sign", "d": "doi"}
+_EDGE = {"eid": "edge_id", "s": "source", "t": "target", "x": "sign", "d": "doi",
+         "v": "verification"}
 _NODE = {"id": "id", "ty": "type", "fn": "full_name", "src": "is_source"}
 _PERT = {"id": "test_id", "g": "gene", "pt": "perturbation_type",
-         "ed": "expected_direction", "sp": "species", "d": "doi"}
+         "ed": "expected_direction", "sp": "species", "d": "doi",
+         "v": "verification"}
 _RECON = {"id": "test_id", "g": "gene", "pt": "perturbation_type",
           "ed": "expected_direction", "ng": "network_gene", "m": "gene_modifiers",
-          "exo": "exogenous_supply", "cb": "comparison_baseline", "rt": "reconciliation_type"}
+          "exo": "exogenous_supply", "cb": "comparison_baseline", "rt": "reconciliation_type",
+          "d": "doi"}
 _EQ = {"n": "node", "ty": "type", "src": "is_source", "a": "activators",
        "inh": "inhibitors", "f": "formula"}
 _ANN = {"n": "node", "fn": "full_name", "ty": "type", "desc": "description", "src": "is_source"}
@@ -212,6 +215,26 @@ def _model_for(kind: str):
             "node_annotations": schemas.NodeAnnotationsFile}.get(kind)
 
 
+# Fields whose default is "nothing to say", per record array. Pydantic dumps every
+# field including defaults, so without this every edge would carry an empty ``v`` —
+# which is exactly the per-record noise the Light format exists to avoid. Absence is
+# the normal case and carries the meaning "grounded"; presence means "act on this".
+_OMIT_WHEN_EMPTY = {"curated_edges": ("edges", ("v",)),
+                    "perturbation_dataset": ("perturbations", ("v",))}
+
+
+def _drop_empty_optionals(slim: Dict[str, Any], kind: str) -> Dict[str, Any]:
+    spec = _OMIT_WHEN_EMPTY.get(kind)
+    if not spec:
+        return slim
+    arr_key, keys = spec
+    for rec in slim.get(arr_key) or []:
+        for k in keys:
+            if not rec.get(k):
+                rec.pop(k, None)
+    return slim
+
+
 def to_slim_dict(data: Dict[str, Any], kind: str) -> Dict[str, Any]:
     """Normalize through the slim Pydantic model -> short-key dict (drops fat fields)."""
     Model = _model_for(kind)
@@ -224,11 +247,19 @@ def dump_slim(path: str, data: Dict[str, Any], kind: Optional[str] = None,
               prefer_toon: bool = True) -> str:
     """Write ``data`` as a slim Light file. Returns the format used ('toon' or 'json')."""
     kind = kind or kind_of(path)
-    slim = to_slim_dict(data, kind)
+    slim = _drop_empty_optionals(to_slim_dict(data, kind), kind)
     arr_key = _TOON_ELIGIBLE.get(kind)
     if prefer_toon and arr_key and slim.get(arr_key):
         records = slim[arr_key]
-        cols = list(records[0].keys())
+        # Union of every record's keys, in first-seen order — NOT records[0].keys().
+        # An optional field set on only some rows (``v``, written by Step 1.6 only when
+        # a claim could not be grounded) is invisible in the first record, and taking
+        # the columns from that record alone drops the flag from every later row.
+        cols: List[str] = []
+        for rec in records:
+            for k in rec:
+                if k not in cols:
+                    cols.append(k)
         toon = toon_codec.try_encode_records(arr_key, cols, records)
         if toon is not None:
             meta = {k: v for k, v in slim.items() if k != arr_key}
@@ -247,12 +278,20 @@ def dump_slim(path: str, data: Dict[str, Any], kind: Optional[str] = None,
 if __name__ == "__main__":
     import sys
     sys.path.insert(0, os.path.dirname(__file__))
-    B = os.path.join(os.path.dirname(__file__), "..", "..", "..", "_slim_examples")
-    # prefer the abbreviated (short-key) examples; fall back to slim
-    for folder in ("Shoot_Branching_network_abbrev", "Shoot_Branching_network"):
-        root = os.path.join(B, folder)
-        if os.path.isdir(root):
+    # Runs against a real built network under ``networks/``. It used to point at
+    # ``_slim_examples/``, which was deleted in 385afda — so the self-test had been
+    # dying on FileNotFoundError rather than testing anything.
+    B = os.path.join(os.path.dirname(__file__), "..", "..", "networks")
+    root, folder = "", ""
+    for folder in sorted(os.listdir(B)) if os.path.isdir(B) else []:
+        cand = os.path.join(B, folder)
+        if os.path.isfile(os.path.join(cand, "data", "curated_edges.json")) and \
+           os.path.isfile(os.path.join(cand, "network", "network.json")) and \
+           os.path.isfile(os.path.join(cand, "data", "reconciled_perturbation_dataset.json")):
+            root = cand
             break
+    if not root:
+        raise SystemExit(f"no built network under {os.path.abspath(B)} to self-test against")
 
     def p(rel):
         return os.path.join(root, rel)

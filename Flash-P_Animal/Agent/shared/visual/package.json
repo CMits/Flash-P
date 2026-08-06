@@ -1,0 +1,21 @@
+{
+  "name": "flashp-visual",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Headless, pixel-perfect static (SVG/PNG) capture for the FLASH-P network visualiser. Mirrors the website's Cytoscape.js + elkjs renderer.",
+  "license": "MIT",
+  "scripts": {
+    "render": "node render.js"
+  },
+  "dependencies": {
+    "cytoscape": "^3.34.0",
+    "cytoscape-dagre": "^4.0.0",
+    "cytoscape-fcose": "^2.2.0",
+    "cose-base": "^2.2.0",
+    "layout-base": "^2.0.1",
+    "dagre": "^0.8.5",
+    "elkjs": "^0.11.1",
+    "cytoscape-svg": "^0.4.0",
+    "puppeteer": "^23.0.0"
+  }
+}

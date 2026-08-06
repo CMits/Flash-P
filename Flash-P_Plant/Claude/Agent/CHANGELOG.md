@@ -1,5 +1,55 @@
 # Changelog
 
+> Entries headed `## [vX.Y.Z]` below are **pipeline releases**, tagged in git
+> (`git tag -l`, [GitHub Releases](https://github.com/CMits/Flash-P/releases)) — each
+> generated network's `flash_p_version` metadata field is derived live from these tags
+> (see `Agent/shared/flashp_version.py`). Entries headed `## [X.Y]` are the older, informal
+> **AGENT-SPEC version** log (CURATOR/BUILDER/etc. individually versioned) that predates the
+> git-tag release system — kept as historical detail, not renumbered.
+
+## [v1.1.0] - 2026-08-05
+
+### Added
+- **Step 1.6 — EVIDENCE VERIFICATION** (new mandatory pipeline step): `verify_evidence.py`
+  resolves every edge/test DOI against Europe PMC, PubMed and OpenAlex, requires a sentence in
+  the paper naming both of the claim's entities, replaces DOIs that don't support their claim,
+  and quarantines what it can't ground. Writes `data/evidence.json` + `data/fulltext/*.txt`.
+- **Species/organism provenance**: each claim now records which organism its evidence actually
+  came from (curated on perturbation tests, read back from the paper for edges), so a network
+  built largely on evidence from another species reads as such instead of implying it throughout.
+- **Studio Evidence tab**: browse every edge/perturbation claim for a network — DOI, verification
+  status (verified / DOI repaired / unverified), species (flagged when foreign to the modelled
+  species), and the verbatim supporting sentence highlighted in place in the source paper
+  (abstract or full text).
+- **Studio Evidence downloads**: JSON and CSV export of the full edges + perturbations database
+  per network, straight from the Evidence tab. JSON is shaped to mirror `Flash-P_DataBase`'s
+  `paper`/`edge`/`perturbation` tables for a future atlas upload.
+- **Git-tag-derived versioning**: `flashp_version.py` computes `flash_p_version` live from
+  `git describe`, and `cut_release.py` cuts a tagged release end-to-end — no more hand-typed
+  version literals.
+- **Atlas contribution export**, and provenance propagated to the Medical and Animal build variants.
+
+### Changed
+- **Step 7 (Studio build)** now asks before opening the Studio at the end of a full `/run-flashp`
+  run and delivers the file directly, instead of a silent browser auto-launch that a tool
+  invocation may not reliably surface.
+- **Perturbation provenance**: the DOI now carries through into
+  `reconciled_perturbation_dataset.json`, not just onto edges.
+
+### Fixed
+- Studio: network scan now embeds exactly one final network per trait (was also picking up
+  refinement snapshots).
+- Studio: fixed Layered/Hierarchy layout edge overlap; added node search in the View tab.
+- Step 1.6: fixed a quota-stall that made verification take hours; stopped mangling gene names
+  during grounding.
+
+## [v1.0.0] - 2026-08-05
+
+### Baseline release
+Retroactively tagged snapshot of `main`, marking the point the git-tag release system was
+introduced. Functionally identical to the untagged code that preceded it — see the AGENT-SPEC
+entries below for what had actually shipped by this point.
+
 ## [1.1] - 2026-03-31
 
 ### Changed — Post Shoot-Branching Run Lessons Baked Into Specs

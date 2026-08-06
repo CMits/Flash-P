@@ -1,5 +1,6 @@
 # Private — never push
 Manuscript/
+FLASHP_ANALYSIS_LOG.md
 
 # Python
 __pycache__/
@@ -60,6 +61,10 @@ Flash-P_Animal/.claude/*.lock
 Flash-P_Animal/.claude/worktrees/
 *.log
 *.tmp
+
+# Provenance paper cache — abstracts and open-access full texts fetched from
+# OpenAlex / Europe PMC. Regenerable, machine-local, and large.
+.flashp_cache/
 
 # README HTML preview (regenerable from README.md via pandoc)
 README_preview.html

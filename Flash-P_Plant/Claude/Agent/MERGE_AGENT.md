@@ -125,7 +125,7 @@ Record in merge_log.json:
 ```json
 {
   "metadata": {
-    "flash_p_version": "1.0",
+    "flash_p_version": "<run: python Agent/shared/flashp_version.py --bare>",
     "phenotype": "merged_arabidopsis",
     "species": "Arabidopsis thaliana",
     "created": "2026-04-15"
@@ -143,7 +143,7 @@ Record in merge_log.json:
 ```json
 {
   "metadata": {
-    "flash_p_version": "1.0",
+    "flash_p_version": "<run: python Agent/shared/flashp_version.py --bare>",
     "phenotype": "merged_arabidopsis",
     "species": "Arabidopsis thaliana",
     "created": "2026-04-15",

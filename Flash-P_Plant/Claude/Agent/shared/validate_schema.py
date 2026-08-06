@@ -23,10 +23,13 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(SCRIPT_DIR))
 
+import light_io
+import toon_codec
 from schemas import (
     AccuracyMetricsFile,
     AlgebraicEquationsFile,
     CuratedEdgesFile,
+    EvidenceFile,
     FailureAnalysisFile,
     MethodComparisonFile,
     NetworkFile,
@@ -43,6 +46,7 @@ from schemas import (
 # Map file name patterns to Pydantic models
 FILE_SCHEMA_MAP = {
     "curated_edges.json": CuratedEdgesFile,
+    "evidence.json": EvidenceFile,
     "perturbation_dataset.json": PerturbationDatasetFile,
     "reconciled_perturbation_dataset.json": ReconciledPerturbationFile,
     "network.json": NetworkFile,
@@ -99,10 +103,21 @@ def validate_file(file_path: Path, quiet: bool = False) -> list:
             print(f"  SKIP: {file_path.name} (no schema defined)")
         return []
 
-    try:
-        data = json.loads(file_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as e:
-        return [f"Invalid JSON: {e}"]
+    text = file_path.read_text(encoding="utf-8")
+    first_line = text.lstrip().splitlines()[0] if text.strip() else ""
+    if first_line.startswith("#meta") or toon_codec.is_toon(text):
+        # Light TOON whole-file format ("#meta {json}" + a TOON table) — decode via
+        # light_io, which raw-reads the table into the same short-alias dicts the
+        # SlimModel schemas already accept (populate_by_name=True, extra="ignore").
+        try:
+            data = light_io._read_raw(str(file_path), light_io.kind_of(str(file_path)))
+        except Exception as e:
+            return [f"Invalid TOON: {e}"]
+    else:
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError as e:
+            return [f"Invalid JSON: {e}"]
 
     try:
         schema_cls.model_validate(data)

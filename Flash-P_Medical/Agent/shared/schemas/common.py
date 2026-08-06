@@ -27,10 +27,45 @@ the rest of the package but are **not** used by the slim Light schemas.
 
 from __future__ import annotations
 
+import re
 from enum import Enum
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
+
+
+# ============================================================================
+# Provenance field types
+# ============================================================================
+
+_DOI_RE = re.compile(r"^10\.\d{4,9}/\S+$")
+
+
+def _check_doi(v):
+    """Accept a real DOI or the empty string; reject anything else.
+
+    Empty is legitimate — during Step 1 an edge may not have found its paper yet, and
+    ``verify_evidence.py`` treats a blank DOI as "go and find one". What is never
+    legitimate is a *malformed* DOI: it cannot resolve, so it can only ever be a typo
+    or an invention, and catching it at write time is far cheaper than at review time.
+
+    Note this checks shape only. A well-formed DOI can still point at the wrong paper —
+    that is what ``Agent/shared/provenance/`` exists to catch, and no regex can.
+    """
+    if v is None:
+        return ""
+    if not isinstance(v, str):
+        raise ValueError(f"doi must be a string, got {type(v).__name__}")
+    s = v.strip()
+    if s and not _DOI_RE.match(s):
+        raise ValueError(
+            f"malformed DOI {s!r} — expected the bare form '10.xxxx/suffix' "
+            f"(no 'doi:' prefix, no https://doi.org/ URL)"
+        )
+    return s
+
+
+DoiStr = Annotated[str, BeforeValidator(_check_doi)]
 
 
 # ============================================================================

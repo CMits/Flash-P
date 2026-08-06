@@ -1,0 +1,76 @@
+{
+  "name": "FLASH-P",
+  "node": {
+    "attr": "type",
+    "fill": {
+      "default": "#FFFFFF",
+      "by": {
+        "HORMONE": "#80CDC1",
+        "ENVIRONMENT": "#CCCC00",
+        "PROCESS": "#FDCC9C",
+        "PHENOTYPE": "#EC7014",
+        "METABOLITE": "#C6E5E7"
+      }
+    },
+    "border": {
+      "default": "#FFFFFF",
+      "by": {
+        "REGULATORY_RNA": "#000000",
+        "PROTEIN_COMPLEX": "#41B6C4",
+        "HORMONE": "#FFFFFF",
+        "GENE": "#969696",
+        "ENVIRONMENT": "#FFFFFF",
+        "PHENOTYPE": "#FFFFFF",
+        "METABOLITE": "#FFFFFF"
+      }
+    },
+    "shape": {
+      "default": "ellipse",
+      "by": {
+        "REGULATORY_RNA": "triangle",
+        "PROTEIN_COMPLEX": "ellipse",
+        "HORMONE": "diamond",
+        "GENE": "ellipse",
+        "ENVIRONMENT": "vee",
+        "PROCESS": "round-rectangle",
+        "PHENOTYPE": "round-rectangle",
+        "METABOLITE": "diamond"
+      }
+    },
+    "size": {
+      "default": 65.0,
+      "by": {
+        "REGULATORY_RNA": 30.0,
+        "GENE": 65.0,
+        "PHENOTYPE": 80.0
+      }
+    },
+    "borderWidth": 6.0,
+    "labelColor": "#000000"
+  },
+  "edge": {
+    "attr": "sign",
+    "line": {
+      "default": "#404040",
+      "by": {
+        "negative": "#F46D43",
+        "positive": "#9ECAE1"
+      }
+    },
+    "arrowShape": {
+      "default": "none",
+      "by": {
+        "negative": "tee",
+        "positive": "triangle"
+      }
+    },
+    "arrowColor": {
+      "default": "#000000",
+      "by": {
+        "negative": "#FF4949",
+        "positive": "#92C5DE"
+      }
+    },
+    "width": 2.0
+  }
+}
