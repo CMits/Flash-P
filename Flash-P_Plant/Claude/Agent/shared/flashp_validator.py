@@ -50,7 +50,7 @@ Default Fixed Parameters (when no equation_spec.json):
 - epsilon = 0.1         (inhibition floor prevents division by zero)
 - K = 10.0              (inhibition ceiling prevents runaway values)
 - direction_threshold = 0.05  (+-5% determines increased/decreased/unchanged)
-- max_iterations = 50   (iteration limit for convergence)
+- max_iterations = 100  (iteration limit for convergence)
 - convergence_tolerance = 0.0001  (steady-state criterion)
 - activator_floor = 0.01  (basal transcription when all activators zero)
 - damping = 0.7         (stabilizes feedback loops)
@@ -659,10 +659,18 @@ def main():
         sys.exit(1)
 
     if args[0] == '--all':
-        network_dirs = [
-            d for d in script_dir.iterdir()
+        # networks live under <project_root>/networks/<Trait>/, not next to this script —
+        # optionally pass the base directory explicitly: --all <networks_dir>
+        base = Path(args[1]) if len(args) > 1 else Path.cwd() / 'networks'
+        network_dirs = sorted(
+            d for d in (base.iterdir() if base.exists() else [])
             if d.is_dir() and (d / 'network' / 'algebraic_equations.json').exists()
-        ]
+        )
+        if not network_dirs:
+            print(f"Error: no networks found under {base} "
+                  f"(expected <trait>/network/algebraic_equations.json). "
+                  f"Pass the base directory explicitly: --all <networks_dir>")
+            sys.exit(1)
     else:
         network_dirs = [Path(d) for d in args]
 
