@@ -35,7 +35,7 @@ Node_Value = Activation x Inhibition x Gene_Modifier + Exogenous_Supply
 
 DEFAULT RULES (when no equation_spec.json exists):
 - Activation = geometric_mean(activators) = product(activators)^(1/n)
-- Inhibition = psoup_inverse(inhibitors) = (n_inhibitors + 1) / (1 + sum(inhibitors))
+- Inhibition = soft_bounded_inverse(inhibitors) = 2 / (1 + product(inhibitors))
 - Gene_Modifier: KO=0.0, KD=0.5, WT=1.0, OE=2.0
 - Exogenous_Supply: external input (default 0)
 
@@ -144,19 +144,27 @@ class FlashPSimulator:
         return product ** (1.0 / len(floored_values))
 
     def compute_inhibition(self, inhibitor_values: List[float]) -> float:
-        """Compute the PSoup inhibitory term.
+        """Compute the soft-bounded inverse inhibitory term.
 
-        g(x1,...,xn) = (n + 1) / (1 + sum(xi))
+        g(x1,...,xn) = 2 / (1 + product(xi))
 
-        Self-normalising: all inhibitors at 1.0 gives (n+1)/(n+1) = 1.0, so no
-        floor or ceiling parameter is needed. De-repression is capped at (n+1)
-        when every inhibitor is knocked out.
+        PSoup's single-inhibitor rule 2/(1+A) with the product of inhibitors in
+        place of the lone inhibitor; identical to PSoup when there is one
+        inhibitor. Multiplying rather than summing keeps each inhibitor's
+        leverage independent of how many co-inhibitors the node has.
+
+        Self-normalising: all inhibitors at 1.0 gives 2/2 = 1.0, so no floor or
+        ceiling parameter is needed. Bounded above at 2.0, and smooth (no clip),
+        which keeps the damped iteration stable.
         """
         if not inhibitor_values:
             return 1.0
 
-        n = len(inhibitor_values)
-        return (n + 1.0) / (1.0 + sum(inhibitor_values))
+        product = 1.0
+        for v in inhibitor_values:
+            product *= v
+
+        return 2.0 / (1.0 + product)
 
     def compute_node(
         self,
@@ -593,7 +601,7 @@ def validate_network(
         species=network.metadata.get('species', 'unknown'),
         method='Algebraic',
         parameters={
-            'inhibition_form': 'psoup_inverse: (n+1)/(1+sum(inhibitors))',
+            'inhibition_form': 'soft_bounded_inverse: 2/(1+product(inhibitors))',
             'direction_threshold': config.direction_threshold,
             'max_iterations': config.max_iterations,
             'convergence_tolerance': config.convergence_tolerance,

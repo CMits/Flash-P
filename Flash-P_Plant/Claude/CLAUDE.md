@@ -106,7 +106,7 @@ iteration snapshots (5) → supplementary + Cytoscape (6). No `candidate_papers.
 
 ## Non-Negotiable Rules
 1. **Evidence standard**: every edge and test needs a DOI (`d`) that **Step 1.6 has verified against the paper itself** — the DOI resolves, and a sentence in that paper names both of the claim's entities. A DOI that merely resolves is not evidence: a wrong one usually resolves too. Anything that can't be grounded is marked `quarantine` in `data/evidence.json` **and flagged `"v": "q"` on the edge/test itself**, so the BUILDER sees it — never silently kept, never silently dropped. Ungroundable claims stay in `curated_edges.json` (most are process links the cascade needs); the BUILDER decides per edge whether the model uses them (`BUILDER_AGENT.md` §Pre-Edge-Addition Checklist). No fabricated references. The data files keep the DOI and that flag only; the quote, abstract and full text live in `data/evidence.json`.
-2. **Equation formulas are FIXED** (geometric-mean activation, PSoup inhibition `(n+1)/(1+sum(inhibitors))`; same for all node types). Full math + ODE/RWR + parameters: `PIPELINE_REFERENCE.md` → *Equation Formulas*. WT baseline = 1.0 when all inputs = 1.0.
+2. **Equation formulas are FIXED** (geometric-mean activation, soft-bounded inhibition `2/(1+product(inhibitors))`; same for all node types). Full math + ODE/RWR + parameters: `PIPELINE_REFERENCE.md` → *Equation Formulas*. WT baseline = 1.0 when all inputs = 1.0.
 3. **Validation scripts only**: use the Python validators. Never compute results yourself.
 4. **WT baseline = 1.0** for all nodes.
 5. **Provenance carry-through**: the `doi` (`d`) only, in all output files.

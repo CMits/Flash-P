@@ -17,7 +17,7 @@ These four rules cannot be violated. Re-read them before each build and before w
 
 1. **NO FLOATING NODES / NO KNOWLEDGE-GRAPH FRAGMENTS.** We build mechanistic models, not knowledge graphs. If a node cannot reach the phenotype through at least one directed edge path, it does not belong in `network.json`. The "just documenting biology" motivation is out of scope — that is exactly what `curated_edges.json` is for. `network.json` is the **used subset**, strictly on the path to phenotype.
 2. **EVERY EDGE MUST HAVE A DOI.** Evidence is not optional. No fabricated citations, no "common knowledge" edges without a paper.
-3. **EQUATIONS ARE FIXED FORMULAS.** Geometric-mean activation, PSoup inhibition `(n+1)/(1+sum(inhibitors))`. Same structure for every node type. Do not invent new formula shapes.
+3. **EQUATIONS ARE FIXED FORMULAS.** Geometric-mean activation, soft-bounded inhibition `2/(1+product(inhibitors))`. Same structure for every node type. Do not invent new formula shapes.
 4. **DO NOT READ PERTURBATION RESULTS.** The network is built from biology; validation is a separate step. Reading test outcomes biases the build.
 
 ## 1.2 QA Split — What Scripts Check, What Only You Can Do
@@ -169,8 +169,8 @@ Trace: MAX2 -> SMXL678 (negative), SMXL678 -> BRC1 (negative)
 
 **Key math to remember:**
 - Geometric mean: `(a1 * a2 * ... * an)^(1/n)` -- more activators DILUTE the signal
-- PSoup inhibition: `(n+1)/(1 + sum(inhibitors))` -- inhibitors are SUMMED, not multiplied
-- A lone inhibitor=0 pushes the term to 2/1 = 2.0; n inhibitors all at 0 give (n+1)
+- Soft-bounded inhibition: `2/(1 + product(inhibitors))` -- inhibitors are MULTIPLIED
+- Any inhibitor at 0 pushes the term to its ceiling of 2/1 = 2.0, whatever n is
 - Inhibitor=0 is a MODERATE, non-saturating effect. Activator=0 is softened by activator_floor=0.01
 
 ### Phase 3: Add Secondary Pathways
@@ -227,7 +227,7 @@ Do this manually, THEN run the script as a second check:
 **Input**: Finalized node and edge lists
 **Output**: `network.json`, `algebraic_equations.json`, `ode_equations.json`, `node_annotations.json`
 
-1. Generate one **algebraic equation** per node using the geometric mean / PSoup inhibition formulas.
+1. Generate one **algebraic equation** per node using the geometric mean / soft-bounded inhibition formulas.
 2. Generate one **ODE Hill function equation** per node using default K=1.0, n=2.
 3. Write the `formula` field for every equation in both files (MANDATORY).
 4. Write `network.json` conforming to `NetworkFile` schema.
@@ -478,7 +478,7 @@ Both equation files use the same node-activator-inhibitor structure, but differe
 
 **Algebraic (algebraic_equations.json):**
 ```
-Node = (product(max(activators, 0.01)))^(1/n_activators) * (n_inhibitors + 1)/(1 + sum(inhibitors)) * gene_modifier + exogenous_supply
+Node = (product(max(activators, 0.01)))^(1/n_activators) * 2/(1 + product(inhibitors)) * gene_modifier + exogenous_supply
 Source nodes: Node = gene_modifier + exogenous_supply
 ```
 
@@ -658,7 +658,7 @@ MAX2 = source node (is_source: true)    — constitutively expressed
 
 **Equation:**
 ```
-SMXL678 = Activation * 3/(1 + D14 + MAX2) * gene_modifier + exogenous
+SMXL678 = Activation * 2/(1 + D14 * MAX2) * gene_modifier + exogenous
 ```
 
 **Math trace — why this is powerful:**
@@ -1033,7 +1033,7 @@ For each non-source node:
 Node = Activation * Inhibition * Gene_Modifier + Exogenous_Supply
 
 Activation  = (product(max(activators, 0.01)))^(1/n_activators)    # geometric mean
-Inhibition  = (n_inhibitors + 1)/(1 + sum(inhibitors))             # PSoup rule
+Inhibition  = 2/(1 + product(inhibitors))                          # soft-bounded inverse
 ```
 
 Source nodes (no activators AND no inhibitors):
@@ -1067,8 +1067,8 @@ The ODE validator will later sweep `K` in `{0.1, 0.5, 1.0, 2.0, 5.0, 10.0}` and 
 | Property | Algebraic | ODE (Hill) |
 |----------|-----------|------------|
 | Activation function | Geometric mean: `(∏ max(a, 0.01))^(1/n)` | Hill: `f(x) = x^n(K^n+1)/(K^n+x^n)` |
-| Inhibition function | PSoup: `(n+1)/(1 + Σi)` | Hill: `g(x) = (K^n+1)/(K^n+x^n)` |
-| Saturation | Soft ceiling at (n_inhibitors + 1) | Sigmoid saturation controlled by K,n |
+| Inhibition function | Soft-bounded: `2/(1 + ∏i)` | Hill: `g(x) = (K^n+1)/(K^n+x^n)` |
+| Saturation | Smooth ceiling at 2.0 | Sigmoid saturation controlled by K,n |
 | Sensitivity to KO | Strong (activator_floor=0.01) | Depends on K,n |
 | Parameters to set | Fixed (floor, damping) | Default K=1.0, n=2 (optimizer tunes later) |
 | Solver | Iterative fixed-point with damping | Euler integration (dx/dt = production - x) |
@@ -1103,7 +1103,7 @@ All nodes = 1.0 when all inputs = 1.0. This is guaranteed by the math in BOTH eq
 ### Equation Dynamics
 
 - **Geometric mean activation**: Adding more activators DILUTES the signal. `(a1 * a2)^(1/2)` is less than `a1` if `a2 < 1`. A node with 5 activators is HARDER to move than one with 1 activator.
-- **PSoup inhibition**: inhibitors are SUMMED, not multiplied. If a lone inhibitor goes to 0 (KO), the term rises to 2.0; with n inhibitors all at 0 it reaches (n+1). A moderate, non-saturating upward push — KO of an inhibitor raises the node's value without pinning it to a ceiling.
+- **Soft-bounded inhibition**: inhibitors are MULTIPLIED, then fed through `2/(1+product)`. Any inhibitor at 0 (KO) drives the term to its ceiling of 2.0, whatever n is. Because the inhibitors multiply, each keeps full leverage no matter how many co-inhibitors share the node — adding a co-inhibitor does not weaken the ones already there.
 - **Signal dilution through cascades**: Every intermediate step dampens the signal. `A->B->C->D->Phenotype` propagates a weaker signal than `A->Phenotype`. Sometimes the shortcut IS the better modeling choice.
 - **Feedback loops**: Can cause oscillation (damping=0.7 stabilizes) or non-convergence. Be aware when adding feedback edges.
 

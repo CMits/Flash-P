@@ -100,7 +100,7 @@
       .sort(function (a, b) { return a.id < b.id ? -1 : a.id > b.id ? 1 : 0; });
   }
 
-  // ---- Algebraic (Flash-P): geometric activation, PSoup inhibition ---------
+  // ---- Algebraic (Flash-P): geometric activation, soft-bounded inhibition --
 
   var ALG = {
     activatorFloor: 0.01,
@@ -132,12 +132,12 @@
         activation = Math.pow(prod, 1 / eq.activators.length);
       }
       if (eq.inhibitors.length) {
-        // PSoup: (n + 1) / (1 + sum(inhibitors)). Summed, not multiplied.
-        var isum = 0;
+        // Soft-bounded inverse: 2 / (1 + product(inhibitors)). Bounded at 2, no clip.
+        var iprod = 1;
         for (k = 0; k < eq.inhibitors.length; k++) {
-          isum += values[eq.inhibitors[k]] != null ? values[eq.inhibitors[k]] : 1;
+          iprod *= values[eq.inhibitors[k]] != null ? values[eq.inhibitors[k]] : 1;
         }
-        inhibition = (eq.inhibitors.length + 1) / (1 + isum);
+        inhibition = 2 / (1 + iprod);
       }
       return Math.max(activation * inhibition * geneMod + (exo[id] != null ? exo[id] : 0), 0);
     }

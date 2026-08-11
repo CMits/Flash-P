@@ -362,8 +362,8 @@
 
   /* Half-width of the colour/size domain, in the units of `signedMagnitude`. */
   var DOMAIN = {
-    // The FLASH-P inhibition term is the PSoup form (n+1)/(1+sum(inhibitors)), so a
-    // node's de-repression is capped at (n+1) — log2 fold rarely leaves +/-2 now.
+    // The FLASH-P inhibition term is 2/(1+product(inhibitors)), so a node's
+    // de-repression is capped at 2x — log2 fold rarely leaves +/-2 now.
     // Saturating at +/-2 (1/4x .. 4x) still covers the mid-range where nearly all the
     // interesting biology sits.
     algebraic: 2,

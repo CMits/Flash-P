@@ -60,7 +60,7 @@ python Agent/shared/validate_schema.py --network {dir}
 ```
 Node = Activation * Inhibition * Gene_Modifier + Exogenous_Supply
 Activation  = (product(max(activators, 0.01)))^(1/n_activators)    # geometric mean
-Inhibition  = (n_inhibitors + 1)/(1 + sum(inhibitors))             # PSoup rule
+Inhibition  = 2/(1 + product(inhibitors))                          # soft-bounded inverse
 Source nodes: Node = gene_modifier + exogenous_supply
 
 Gene_Modifier: KO=0.0, KD=0.5, WT=1.0 (default), OE=2.0
@@ -90,7 +90,7 @@ Signed graph propagation, alpha sweep: {0.5, 0.6, 0.7, 0.75, 0.8, 0.85, 0.9, 0.9
 
 **Geometric mean activation**: Adding more activators DILUTES the signal. `(a1 * a2)^(1/2)` is less than `a1` if `a2 < 1`. A node with 5 activators is HARDER to move than one with 1 activator — but downstream cascade amplification often compensates.
 
-**PSoup inhibition**: inhibitors are SUMMED, not multiplied — `(n+1)/(1 + sum)`. If a lone inhibitor goes to 0 (KO), the term rises to 2.0; with n inhibitors all knocked out it reaches (n+1). A moderate, non-saturating upward push, so KO of an inhibitor raises the node's value without pinning it to a ceiling. The term is self-normalising (1.0 at WT for any n) and needs no epsilon floor or K ceiling.
+**Soft-bounded inhibition**: `2/(1 + product(inhibitors))` — PSoup's `2/(1+A)` rule with the product of inhibitors in place of the single inhibitor (identical when there is one). Multiplying keeps each inhibitor's leverage the same regardless of how many co-inhibitors a node has; summing them, as the plain PSoup rule does, would divide each one's influence by (n+1). Any KO drives the term to its ceiling of 2.0. Self-normalising (1.0 at WT for any n), smooth, and needs no epsilon floor or K ceiling.
 
 **Signal dilution through cascades**: Every intermediate step dampens the signal. `A->B->C->D->Phenotype` propagates a weaker signal than `A->Phenotype`. Sometimes the shortcut IS the better modeling choice.
 

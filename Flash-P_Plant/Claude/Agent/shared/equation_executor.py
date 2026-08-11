@@ -13,7 +13,7 @@ ALL functions satisfy three invariants:
   3. Boundedness: outputs are finite and non-negative
 
 The agent picks which function to use for each node in equation_spec.json.
-If no spec exists, defaults to geomean + psoup_inverse.
+If no spec exists, defaults to geomean + soft_bounded_inverse.
 
 IMPORTANT: This module is for the ALGEBRAIC validator only.
   - ODE validator always uses Hill functions (separate math framework)
@@ -48,12 +48,20 @@ min_pool:
 INHIBITION FUNCTIONS (for combining multiple inhibitors)
 ================================================================================
 
-psoup_inverse (default):
-  g(x1,...,xn) = (n + 1) / (1 + sum(xi))
-  PSoup rule: "the number of inhibitors plus 1, divided by the sum of
-  inhibitors plus 1". Inhibitors are SUMMED. Self-normalising at WT for any n;
-  de-repression is capped at (n+1) with no epsilon/K needed.
-  ('bounded_inverse' is kept as a back-compat alias for this function.)
+soft_bounded_inverse (default):
+  g(x1,...,xn) = 2 / (1 + product(xi))
+  PSoup's single-inhibitor rule 2/(1+A), with the PRODUCT of inhibitors in
+  place of the lone inhibitor. Identical to PSoup when n = 1.
+
+  Inhibitors are MULTIPLIED, so each keeps the same leverage no matter how
+  many co-inhibitors a node has (elasticity -1/2 at WT for every n). Summing
+  them instead, as the plain PSoup rule does, divides each one's influence by
+  (n+1) -- a node with four inhibitors barely responds to any one of them.
+
+  The denominator saturates smoothly rather than being clipped, so the term is
+  bounded at 2.0 with no epsilon floor or K ceiling, and its slope stays finite
+  everywhere -- which is what keeps the damped iteration converging.
+  ('psoup_inverse' and 'bounded_inverse' are back-compat aliases.)
 
 independent_inverse:
   g(x1,...,xn) = product(min(1 / max(xi, epsilon), K))
@@ -155,20 +163,27 @@ def act_min_pool(values: List[float], floor: float = DEFAULT_ACTIVATOR_FLOOR,
 # INHIBITION FUNCTIONS
 # ============================================================================
 
-def inh_psoup_inverse(values: List[float], **kwargs) -> float:
-    """PSoup inhibition (default).
-    g(x1,...,xn) = (n + 1) / (1 + sum(xi))
+def inh_soft_bounded_inverse(values: List[float], **kwargs) -> float:
+    """Soft-bounded inverse inhibition (default).
+    g(x1,...,xn) = 2 / (1 + product(xi))
 
-    "The number of inhibitors plus 1, divided by the sum of inhibitors plus 1"
-    (PSoup algebraic rules). Inhibitors are SUMMED, not multiplied.
+    PSoup's single-inhibitor rule 2/(1+A) with the PRODUCT of inhibitors
+    substituted for the lone inhibitor; for n = 1 the two are identical.
 
-    Self-normalising: g(1,...,1) = (n+1)/(n+1) = 1.0 for any n, so no epsilon
-    floor or K ceiling is needed. De-repression is naturally capped at (n+1)
-    when every inhibitor is knocked out.
+    Multiplying rather than summing keeps every inhibitor's leverage constant
+    in n (elasticity -1/2 at WT for any n). The plain PSoup sum shares one
+    denominator across all inhibitors, which dilutes each to -1/(n+1).
+
+    Self-normalising: product(1,...,1) = 1 so g = 2/2 = 1.0 for any n. Bounded
+    above at 2.0 and smooth everywhere -- no epsilon floor, no K ceiling, and
+    no clip, so the damped fixed-point iteration stays stable.
     """
     if not values:
         return 1.0
-    return (len(values) + 1.0) / (1.0 + sum(values))
+    product = 1.0
+    for v in values:
+        product *= v
+    return 2.0 / (1.0 + product)
 
 
 def inh_independent_inverse(values: List[float], epsilon: float = DEFAULT_EPSILON,
@@ -211,11 +226,13 @@ ACTIVATION_FUNCTIONS = {
 }
 
 INHIBITION_FUNCTIONS = {
-    'psoup_inverse': inh_psoup_inverse,
-    # Back-compat alias: existing equation_spec.json files name 'bounded_inverse'.
-    # They still load, but now resolve to the PSoup term — the old bounded
-    # inverse min(1/max(product, epsilon), K) is no longer available.
-    'bounded_inverse': inh_psoup_inverse,
+    'soft_bounded_inverse': inh_soft_bounded_inverse,
+    # Back-compat aliases: existing equation_spec.json files name one of these.
+    # They still load, but resolve to the soft-bounded term — neither the hard
+    # clipped min(1/max(product, epsilon), K) nor the summed PSoup form
+    # (n+1)/(1+sum) is available any more.
+    'psoup_inverse': inh_soft_bounded_inverse,
+    'bounded_inverse': inh_soft_bounded_inverse,
     'independent_inverse': inh_independent_inverse,
     'linear_clamp': inh_linear_clamp,
 }
@@ -230,7 +247,7 @@ def get_default_spec() -> Dict:
     return {
         'version': '1.0',
         'default_activation': 'geomean',
-        'default_inhibition': 'psoup_inverse',
+        'default_inhibition': 'soft_bounded_inverse',
         'default_params': {
             'epsilon': DEFAULT_EPSILON,
             'K_inhibition': DEFAULT_K,
@@ -261,7 +278,7 @@ def validate_equation_spec(spec: Dict) -> List[str]:
         errors.append(f"Unknown default activation: '{default_act}'. "
                       f"Valid: {list(ACTIVATION_FUNCTIONS.keys())}")
 
-    default_inh = spec.get('default_inhibition', 'psoup_inverse')
+    default_inh = spec.get('default_inhibition', 'soft_bounded_inverse')
     if default_inh not in INHIBITION_FUNCTIONS:
         errors.append(f"Unknown default inhibition: '{default_inh}'. "
                       f"Valid: {list(INHIBITION_FUNCTIONS.keys())}")
@@ -353,7 +370,7 @@ def execute_equation(
     act_func = ACTIVATION_FUNCTIONS[act_name]
 
     # Determine inhibition function
-    inh_name = node_spec.get('inhibition', spec.get('default_inhibition', 'psoup_inverse'))
+    inh_name = node_spec.get('inhibition', spec.get('default_inhibition', 'soft_bounded_inverse'))
     inh_func = INHIBITION_FUNCTIONS[inh_name]
 
     # Get activator values
