@@ -362,20 +362,21 @@
 
   /* Half-width of the colour/size domain, in the units of `signedMagnitude`. */
   var DOMAIN = {
-    // The FLASH-P inhibition term is capped at K = 10, so log2 fold routinely runs past 3.
-    // Saturating at +/-2 (1/4x .. 4x) keeps the mid-range — where nearly all the
-    // interesting biology sits — actually readable.
+    // The FLASH-P inhibition term is the PSoup form (n+1)/(1+sum(inhibitors)), so a
+    // node's de-repression is capped at (n+1) — log2 fold rarely leaves +/-2 now.
+    // Saturating at +/-2 (1/4x .. 4x) still covers the mid-range where nearly all the
+    // interesting biology sits.
     algebraic: 2,
     psoup: 2,
     ode: 2,
     rwr: 1
   };
 
-  /* Below this the node counts as unchanged (matches classifyDirection's 0.05). */
+  /* Below this the node counts as unchanged (matches classifyDirection's 0.01). */
   var TOL = {
-    algebraic: 0.05,
-    psoup: 0.05,
-    ode: 0.05,
+    algebraic: 0.01,
+    psoup: 0.01,
+    ode: 0.01,
     // RWR classifies direction at 1e-5, which is far too tight to filter a graph on — it
     // would keep every node in the network.
     rwr: 1e-3
@@ -388,7 +389,7 @@
   }
 
   function tolOf(method) {
-    return TOL[method] == null ? 0.05 : TOL[method];
+    return TOL[method] == null ? 0.01 : TOL[method];
   }
 
   function clamp(v, lo, hi) {

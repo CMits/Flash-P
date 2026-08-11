@@ -57,7 +57,7 @@ Default Parameters:
 - dt = 0.1              (Euler integration step)
 - max_time = 50         (Maximum simulation time)
 - convergence_tol = 0.0001  (Steady-state criterion)
-- direction_threshold = 0.05  (+-5% for increased/decreased/unchanged)
+- direction_threshold = 0.01  (+-1% for increased/decreased/unchanged)
 
 ================================================================================
 COMPARISON RULES (Same as algebraic method)
@@ -111,7 +111,7 @@ class ODEConfig:
     dt: float = 0.1                # Euler integration step
     max_time: float = 50.0         # Maximum simulation time
     convergence_tolerance: float = 0.0001  # Steady-state criterion
-    direction_threshold: float = 0.05  # +-5% for direction classification
+    direction_threshold: float = 0.01  # +-1% for direction classification
     activator_floor: float = 0.01  # Basal expression when activators zero
 
 

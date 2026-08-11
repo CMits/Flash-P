@@ -108,5 +108,5 @@ class ReconciledPerturbationMetadata(FlashPMetadata):
 
 class ReconciledPerturbationFile(SlimModel):
     metadata: ReconciledPerturbationMetadata
-    direction_threshold: float = 0.05
+    direction_threshold: float = 0.01
     perturbations: List[ReconciledPerturbation]

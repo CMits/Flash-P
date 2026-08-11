@@ -27,7 +27,7 @@ perturbation is not the same across environments. The naive contrast
 (the wild type itself responds to the environment) with the genuine interaction.
 The interaction must divide out each environment's own wild-type response.
 
-On the FLASH-P multiplicative scale (geometric-mean activation, bounded-inverse
+On the FLASH-P multiplicative scale (geometric-mean activation, PSoup
 inhibition), independent effects compose multiplicatively = ADDITIVELY in log
 space, so the natural null is "the gene's log fold-change is the same in every
 environment." The interaction is the residual from that null. Working in log2,
@@ -56,9 +56,10 @@ WHERE THE SIGNAL COMES FROM (read this before interpreting small numbers)
 Because regulatory effects combine MULTIPLICATIVELY, two perturbations that feed
 genuinely separate, unsaturated branches that meet only by multiplication produce
 GxE ~ 0 (they are log-additive). Non-zero GxE in a FLASH-P network arises from:
-  (1) SATURATION of the bounded-inverse inhibition term (floor epsilon, ceiling
-      K) -- once an inhibitor product is driven past those bounds, multiplicative
-      separability breaks and an interaction appears; and
+  (1) CO-INHIBITION of a shared node -- the PSoup term (n+1)/(1 + sum(inhibitors))
+      puts every inhibitor of a node into ONE denominator, so two inhibitors of
+      the same node are never multiplicatively separable and produce an
+      interaction even far from any bound; and
   (2) SHARED MULTI-PATH structure -- a gene that enters the phenotype cascade at
       more than one node, or an environment and a gene that co-regulate a common
       intermediate, are not separable and generate interaction.

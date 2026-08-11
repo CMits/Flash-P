@@ -58,7 +58,8 @@ never generated. Counts for the maize SC network: 117 singles, 6,675 doubles.
 EPISTASIS — DEFINITION & REASONING
 ----------------------------------
 The model combines regulatory effects MULTIPLICATIVELY (geometric-mean
-activation, bounded-inverse inhibition, Hill products). On a multiplicative
+activation, PSoup inhibition, Hill products). Note that two inhibitors of the
+SAME node share one PSoup denominator and so are not separable. On a multiplicative
 scale, independent perturbations compose multiplicatively, i.e. ADDITIVELY in
 log space. So the natural null model for two perturbations A, B is:
 

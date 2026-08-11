@@ -25,7 +25,7 @@ These rules cannot be violated. Re-read them before every iteration.
 2. **NO ACCURACY CHASING.** Do NOT flip an edge sign just to make a test pass. Do NOT add an edge to one node merely because it improves accuracy. The biology comes first; accuracy is a downstream consequence. A 1% accuracy gain from an unsupported edge is worth less than 0% gain from staying biologically honest.
 3. **REVERT IF NOT IMPROVED.** Each iteration's keep/revert decision is enforced by the +0.5% threshold (Section 8). A fix that makes one test pass but breaks two others is a net loss and must be reverted. The decision is mechanical, not subjective.
 4. **NEVER OVERWRITE SNAPSHOTS.** Each iteration's `iteration_N/` directory is permanent. If you revert, the revert decision is recorded but the snapshot remains. Final `refinement/refined_network.json` is a copy of the BEST iteration's snapshot, not the latest.
-5. **DO NOT MODIFY THE EQUATION FRAMEWORK.** Geometric-mean activation, bounded-inverse inhibition, Hill functions, and RWR signed-graph propagation are fixed by FLASH-P v1.0. You can change WHICH nodes feed which (edges) and HOW perturbations are encoded (gene_modifiers, exogenous_supply, comparison_baseline), but you cannot invent new equation shapes or alter constants like `epsilon`, `K`, `damping`. K and n are swept by the ODE validator's sensitivity sweep, not by you.
+5. **DO NOT MODIFY THE EQUATION FRAMEWORK.** Geometric-mean activation, PSoup inhibition `(n+1)/(1+sum(inhibitors))`, Hill functions, and RWR signed-graph propagation are fixed by FLASH-P. You can change WHICH nodes feed which (edges) and HOW perturbations are encoded (gene_modifiers, exogenous_supply, comparison_baseline), but you cannot invent new equation shapes or alter constants like `activator_floor`, `damping`. K and n are swept by the ODE validator's sensitivity sweep, not by you.
 6. **CASCADE-LEVEL FIXES BEAT WHACK-A-MOLE.** If 4 failures share a root cause (e.g., "BR cascade weakly coupled to phenotype" → 5 BR-mutant tests fail with the same direction inversion), fix the cascade once with one structural change. Do not write 5 separate fixes targeting individual tests.
 7. **ENCODING FIXES BEFORE STRUCTURAL FIXES.** Always check Section 11 (common encoding fixes) first. Many failures are perturbation-dataset bugs, not network bugs. An encoding fix is cheaper, less risky, and doesn't require new DOIs.
 
@@ -34,7 +34,7 @@ These rules cannot be violated. Re-read them before every iteration.
 | You DO | You DON'T |
 |--------|-----------|
 | Add or remove edges with DOI evidence to fix a documented signal-propagation problem | Rebuild the network from scratch (that's BUILDER) |
-| Change edge signs (+1/-1) when literature supports the opposite direction | Modify equation framework constants (epsilon, K, damping) |
+| Change edge signs (+1/-1) when literature supports the opposite direction | Modify equation framework constants (activator_floor, damping) |
 | Fix perturbation encoding (gene_modifier, exogenous_supply, comparison_baseline, expected_direction) per Trap rules | Read perturbation tests during BUILDER/JUDGE phase (already past, but principle stands: tests come from literature, not from your judgement) |
 | Re-run all three validators after every change | Compute predictions yourself; always use the validator scripts |
 | Triage failures into fixable vs framework_limitation vs composite_collapse vs epistasis_complexity | Fix every failure — some are honest framework limits |
@@ -121,18 +121,18 @@ The algebraic validator writes `validation/validation_results.csv` with one row 
 
 | Ratio profile | Diagnosis | Typical fixability |
 |---|---|---|
-| ratio \u2248 1.0 (within 0.95\u20131.05) | **No signal propagated.** Either geometric-mean dilution at a hub (perturbed gene fed a 10+-input node), or bounded-inverse saturation (the perturbed inhibitor was part of a product already capped at K=10) | Fixable for dilution (trim hub inputs); NOT fixable for bounded-inverse saturation (framework limit) |
-| ratio > 5 or < 0.2 | **Cascade amplification.** A perturbed gene caused a single-input-only downstream node to drop to the activator_floor (0.01), which then explodes through a bounded-inverse inhibition step | Fixable: add another activator to the collapsed node so the perturbation can't drive it to floor |
+| ratio \u2248 1.0 (within 0.99\u20131.01) | **No signal propagated.** Either geometric-mean dilution at a hub (perturbed gene fed a 10+-input node), or PSoup inhibitor dilution (the perturbed inhibitor is one of many summed in `1 + sum(inhibitors)`, so moving it alone barely shifts the term) | Fixable in both cases by trimming inputs \u2014 hub activators for dilution, co-inhibitors for the PSoup case |
+| ratio > 5 or < 0.2 | **Cascade amplification.** A perturbed gene caused a single-input-only downstream node to drop to the activator_floor (0.01), which then propagates through an inhibition step. Uncommon, since PSoup caps de-repression at (n_inhibitors + 1) rather than letting it run away | Fixable: add another activator to the collapsed node so the perturbation can't drive it to floor |
 | ratio between 0.5 and 2.0 with wrong direction | **Inverted dominant path.** The cascade is propagating, but the dominant signal path produces the opposite of expected biology. Often this is one strong indirect path overriding a weaker direct one | Sometimes fixable: add a stronger competing path with DOI evidence, or re-examine whether the encoded edge sign is correct |
-| ratio matches expected direction but wrong magnitude class | **Threshold borderline.** Predicted direction agrees but the |log2 fold change| crossed the 0.05 direction_threshold barely | Usually NOT a real failure to fix; check that the algebraic threshold and ODE/RWR threshold agree |
+| ratio matches expected direction but wrong magnitude class | **Threshold borderline.** Predicted direction agrees but the |log2 fold change| crossed the 0.01 direction_threshold barely | Usually NOT a real failure to fix; check that the algebraic threshold and ODE/RWR threshold agree |
 
 ### Step B: Cluster failures by mechanism, not by gene
 
 Before listing fixes, group the failures into 3\u20135 root-cause clusters. Examples from a real Seed_Size run:
 
 - **Cluster 1: Cascade amplification via single-input ABI5 collapse.** Affects T118 (ABI4 KO, ratio=11.2), T044 (RAV1 KO, ratio=0.14). Root cause: ABI5 has only ABI4 (and ABA) as activators; ABI3 is canonical activator (Lopez-Molina 2002) but missing from network.
-- **Cluster 2: Bounded-inverse saturation in BR-rescue tests.** Affects T063, T064, T065 (all ratio=1.0 with mutant baseline). Root cause: det2 baseline drives all repressors to bounded-inverse cap K=10; removing any one of them doesn't change the saturated value. **Framework limit \u2014 not fixable.**
-- **Cluster 3: Geometric-mean dilution at Integument_Growth hub.** Affects T103 (ratio=1.0). 15 inputs to one node dilute every single perturbation below the 5% direction threshold.
+- **Cluster 2: PSoup inhibitor dilution in BR-rescue tests.** Affects T063, T064, T065 (all ratio=1.0 with mutant baseline). Root cause: the target node has many co-inhibitors, so `1 + sum(inhibitors)` barely moves when one of them is removed. **Fixable:** trim co-inhibitors to the ones with direct evidence, or route the effect through a dedicated repressor node.
+- **Cluster 3: Geometric-mean dilution at Integument_Growth hub.** Affects T103 (ratio=1.0). 15 inputs to one node dilute every single perturbation below the 1% direction threshold.
 
 This clustering tells you the iteration budget exactly: cluster 1 and 3 each get one structural fix; cluster 2 gets a framework-limitation note. ONE iteration with TWO fixes can resolve clusters 1 and 3 simultaneously.
 
@@ -141,8 +141,8 @@ This clustering tells you the iteration budget exactly: cluster 1 and 3 each get
 For each proposed fix, predict the expected ratio change. If you can't predict it, you don't understand what the fix does. Example:
 
 - Proposed fix: Add ABI3 \u2192 ABI5 (+1).
-- Current ABI5 equation: `ABI5 = (max(ABA, 0.01) * max(ABI4, 0.01))^(1/2) * min(1/max(RAV1, 0.1), 10) * gm`
-- After fix: `ABI5 = (max(ABA, 0.01) * max(ABI4, 0.01) * max(ABI3, 0.01))^(1/3) * min(1/max(RAV1, 0.1), 10) * gm`
+- Current ABI5 equation: `ABI5 = (max(ABA, 0.01) * max(ABI4, 0.01))^(1/2) * 2/(1 + RAV1) * gm`
+- After fix: `ABI5 = (max(ABA, 0.01) * max(ABI4, 0.01) * max(ABI3, 0.01))^(1/3) * 2/(1 + RAV1) * gm`
 - For T118 (abi4 KO): ABI4 = 0, was ABI5 = (1*0.01)^0.5 = 0.1; now ABI5 = (1*0.01*1)^0.333 = 0.21. ABI5 inhibition denominator was 1/min(1*0.1, 0.1) = 10 (capped); now 1/min(1*0.21, 0.1) = 1/0.21 = 4.76. Seed_Size inhibition factor drops from 10 to 4.76. Predicted ratio drops from 11.2 to ~5.3. Closer to unchanged direction but still not at 1.0.
 - Conclusion: Fix improves T118 ratio direction (smaller amplification) but may not flip prediction to "unchanged" entirely. Worth trying.
 
@@ -168,7 +168,7 @@ Iteration N proposed package:
   Cluster 1 fix (T118, T044): Add ABI3\u2192ABI5 (+1) per Lopez-Molina 2002 (DOI: 10.1101/gad.1018902)
   Cluster 3 fix (T103): Trim Auxin\u2192Integument_Growth direct edge (Auxin still routes via TIR1\u2192ARF2\u22a3Integument)
   Encoding check: T100 GA_treatment encoded against Gomez 2023 framework; accept as framework_limitation
-  Framework limits noted: T063, T064, T065 (bounded-inverse saturation), T047 (LAC2), T108 (tissue-localised)
+  Framework limits noted: T047 (LAC2), T108 (tissue-localised)
   Predicted gains: T118 fixable (+1 test), T044 fixable (+1 test), T103 fixable (+1 test) \u2192 estimated +2.9% on RWR
 ```
 
@@ -186,7 +186,7 @@ Improve the best-method accuracy by analysing validation failures and making tar
 
 **Handles:** edge additions, edge removals, sign corrections (+1/-1), perturbation encoding fixes (gene_modifier, exogenous_supply, expected direction, comparison_baseline), dead-end node resolution, restoration of nodes that BUILDER over-trimmed if their absence causes a documented cascade gap.
 
-**Does NOT:** rebuild the network from scratch (BUILDER's job), modify the equation framework (geometric-mean activation, bounded-inverse inhibition, Hill functions, RWR are fixed), tune K/n/alpha (validator sensitivity sweeps do that), ignore failures without justification, add edges without DOI evidence, invent mechanisms not in literature, chase accuracy past the +0.5%-per-iteration threshold.
+**Does NOT:** rebuild the network from scratch (BUILDER's job), modify the equation framework (geometric-mean activation, PSoup inhibition, Hill functions, RWR are fixed), tune K/n/alpha (validator sensitivity sweeps do that), ignore failures without justification, add edges without DOI evidence, invent mechanisms not in literature, chase accuracy past the +0.5%-per-iteration threshold.
 
 ## 4. Pipeline Position
 
@@ -245,7 +245,7 @@ Run the full §1.5 Diagnostic Protocol:
 
 After diagnosis, classify each failure (or cluster) as:
 - **Fixable** \u2014 a missing edge, wrong sign, encoding error, or hub-overload explains the failure AND a fix has predictable positive impact.
-- **Framework limitation** \u2014 bounded-inverse saturation, geometric-mean dilution past trim limits, signaling-mutant rescue Trap 5, tissue-localised perturbation, or two-papers-disagree direction conflict. Document and accept; do not fix.
+- **Framework limitation** \u2014 geometric-mean dilution past trim limits, signaling-mutant rescue Trap 5, tissue-localised perturbation, or two-papers-disagree direction conflict. Document and accept; do not fix.
 
 **Step 2 -- Propose a Fix PACKAGE with Evidence.**
 

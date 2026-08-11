@@ -153,7 +153,7 @@ Run all three validators, produce schema-compliant result JSONs, and determine w
   "comparison_baseline_value": 1.0,
   "ratio": 1.42,
   "log2_fold_change": 0.506,
-  "direction_threshold": 0.05,
+  "direction_threshold": 0.01,
   "predicted_direction": "increased",
   "expected_direction": "increased",
   "correct": true,

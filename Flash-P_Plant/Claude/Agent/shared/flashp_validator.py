@@ -35,7 +35,7 @@ Node_Value = Activation x Inhibition x Gene_Modifier + Exogenous_Supply
 
 DEFAULT RULES (when no equation_spec.json exists):
 - Activation = geometric_mean(activators) = product(activators)^(1/n)
-- Inhibition = bounded_inverse(inhibitors) = min(1/max(product, epsilon), K)
+- Inhibition = psoup_inverse(inhibitors) = (n_inhibitors + 1) / (1 + sum(inhibitors))
 - Gene_Modifier: KO=0.0, KD=0.5, WT=1.0, OE=2.0
 - Exogenous_Supply: external input (default 0)
 
@@ -47,9 +47,7 @@ instead of the defaults. These may include:
 - Per-node equation overrides for better accuracy
 
 Default Fixed Parameters (when no equation_spec.json):
-- epsilon = 0.1         (inhibition floor prevents division by zero)
-- K = 10.0              (inhibition ceiling prevents runaway values)
-- direction_threshold = 0.05  (+-5% determines increased/decreased/unchanged)
+- direction_threshold = 0.01  (+-1% determines increased/decreased/unchanged)
 - max_iterations = 50   (iteration limit for convergence)
 - convergence_tolerance = 0.0001  (steady-state criterion)
 - activator_floor = 0.01  (basal transcription when all activators zero)
@@ -90,9 +88,7 @@ except ImportError:
 @dataclass
 class SimulationConfig:
     """Fixed simulation parameters - validated across 10 networks."""
-    epsilon: float = 0.1           # Inhibition floor
-    K: float = 10.0                # Inhibition ceiling
-    direction_threshold: float = 0.05  # +-5% for unchanged
+    direction_threshold: float = 0.01  # +-1% for unchanged
     max_iterations: int = 100      # Maximum simulation iterations
     convergence_tolerance: float = 0.0001  # Steady-state convergence criterion
     activator_floor: float = 0.01  # Basal transcription when no activators
@@ -148,15 +144,19 @@ class FlashPSimulator:
         return product ** (1.0 / len(floored_values))
 
     def compute_inhibition(self, inhibitor_values: List[float]) -> float:
-        """Compute bounded inverse of inhibitor product."""
+        """Compute the PSoup inhibitory term.
+
+        g(x1,...,xn) = (n + 1) / (1 + sum(xi))
+
+        Self-normalising: all inhibitors at 1.0 gives (n+1)/(n+1) = 1.0, so no
+        floor or ceiling parameter is needed. De-repression is capped at (n+1)
+        when every inhibitor is knocked out.
+        """
         if not inhibitor_values:
             return 1.0
 
-        product = 1.0
-        for v in inhibitor_values:
-            product *= v
-
-        return min(1.0 / max(product, self.config.epsilon), self.config.K)
+        n = len(inhibitor_values)
+        return (n + 1.0) / (1.0 + sum(inhibitor_values))
 
     def compute_node(
         self,
@@ -520,8 +520,6 @@ def validate_network(
         print(f"\n*** USING DEFAULT ALGEBRAIC RULES ***")
 
     print(f"\nSimulation parameters:")
-    print(f"  epsilon: {config.epsilon}")
-    print(f"  K: {config.K}")
     print(f"  direction_threshold: {config.direction_threshold}")
     print(f"  max_iterations: {config.max_iterations}")
     print(f"  convergence_tolerance: {config.convergence_tolerance}")
@@ -595,8 +593,7 @@ def validate_network(
         species=network.metadata.get('species', 'unknown'),
         method='Algebraic',
         parameters={
-            'epsilon': config.epsilon,
-            'K': config.K,
+            'inhibition_form': 'psoup_inverse: (n+1)/(1+sum(inhibitors))',
             'direction_threshold': config.direction_threshold,
             'max_iterations': config.max_iterations,
             'convergence_tolerance': config.convergence_tolerance,

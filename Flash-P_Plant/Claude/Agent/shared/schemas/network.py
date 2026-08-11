@@ -57,11 +57,9 @@ class NetworkFile(SlimModel):
 
 class AlgebraicParameters(SlimModel):
     """Load-bearing constants — kept READABLE (one block per file)."""
-    epsilon: float = 0.1
-    K: float = 10.0
     activator_floor: float = 0.01
     damping: float = 0.7
-    direction_threshold: float = 0.05
+    direction_threshold: float = 0.01
     max_iterations: int = 100
     convergence_tolerance: float = 0.0001
 
@@ -100,7 +98,7 @@ class ODEEquationsMetadata(SlimModel):
     method: str = "ODE (Hill Functions)"
     K: float = 1.0
     n: int = 2
-    direction_threshold: float = 0.05
+    direction_threshold: float = 0.01
     activator_floor: float = 0.01
 
 

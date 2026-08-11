@@ -17,7 +17,7 @@ These four rules cannot be violated. Re-read them before each build and before w
 
 1. **NO FLOATING NODES / NO KNOWLEDGE-GRAPH FRAGMENTS.** We build mechanistic models, not knowledge graphs. If a node cannot reach the phenotype through at least one directed edge path, it does not belong in `network.json`. The "just documenting biology" motivation is out of scope — that is exactly what `curated_edges.json` is for. `network.json` is the **used subset**, strictly on the path to phenotype.
 2. **EVERY EDGE MUST HAVE A DOI.** Evidence is not optional. No fabricated citations, no "common knowledge" edges without a paper.
-3. **EQUATIONS ARE FIXED FORMULAS.** Geometric-mean activation, bounded-inverse inhibition. Same structure for every node type. Do not invent new formula shapes.
+3. **EQUATIONS ARE FIXED FORMULAS.** Geometric-mean activation, PSoup inhibition `(n+1)/(1+sum(inhibitors))`. Same structure for every node type. Do not invent new formula shapes.
 4. **DO NOT READ PERTURBATION RESULTS.** The network is built from biology; validation is a separate step. Reading test outcomes biases the build.
 
 ## 1.2 QA Split — What Scripts Check, What Only You Can Do
@@ -169,8 +169,9 @@ Trace: MAX2 -> SMXL678 (negative), SMXL678 -> BRC1 (negative)
 
 **Key math to remember:**
 - Geometric mean: `(a1 * a2 * ... * an)^(1/n)` -- more activators DILUTE the signal
-- Bounded inverse: inhibitor=0 pushes node to min(1/epsilon, K) = min(10, 10) = 10.0
-- Inhibitor=0 is a STRONG effect. Activator=0 is softened by activator_floor=0.01
+- PSoup inhibition: `(n+1)/(1 + sum(inhibitors))` -- inhibitors are SUMMED, not multiplied
+- A lone inhibitor=0 pushes the term to 2/1 = 2.0; n inhibitors all at 0 give (n+1)
+- Inhibitor=0 is a MODERATE, non-saturating effect. Activator=0 is softened by activator_floor=0.01
 
 ### Phase 3: Add Secondary Pathways
 
@@ -226,7 +227,7 @@ Do this manually, THEN run the script as a second check:
 **Input**: Finalized node and edge lists
 **Output**: `network.json`, `algebraic_equations.json`, `ode_equations.json`, `node_annotations.json`
 
-1. Generate one **algebraic equation** per node using the geometric mean / bounded inverse formulas.
+1. Generate one **algebraic equation** per node using the geometric mean / PSoup inhibition formulas.
 2. Generate one **ODE Hill function equation** per node using default K=1.0, n=2.
 3. Write the `formula` field for every equation in both files (MANDATORY).
 4. Write `network.json` conforming to `NetworkFile` schema.
@@ -372,11 +373,9 @@ Do this manually, THEN run the script as a second check:
     "total_equations": 5
   },
   "parameters": {
-    "epsilon": 0.1,
-    "K": 10.0,
     "activator_floor": 0.01,
     "damping": 0.7,
-    "direction_threshold": 0.05,
+    "direction_threshold": 0.01,
     "max_iterations": 100,
     "convergence_tolerance": 0.0001
   },
@@ -395,7 +394,7 @@ Do this manually, THEN run the script as a second check:
       "is_source": false,
       "activators": [],
       "inhibitors": ["Decapitation"],
-      "formula": "Strigolactone = min(1/max(Decapitation, 0.1), 10.0) * gene_modifier + exogenous_supply"
+      "formula": "Strigolactone = 2/(1 + Decapitation) * gene_modifier + exogenous_supply"
     },
     {
       "node": "MAX2",
@@ -419,7 +418,7 @@ Do this manually, THEN run the script as a second check:
       "is_source": false,
       "activators": ["Decapitation"],
       "inhibitors": ["BRC1"],
-      "formula": "Shoot_Branching = max(Decapitation, 0.01)^(1/1) * min(1/max(BRC1, 0.1), 10.0) * gene_modifier + exogenous_supply"
+      "formula": "Shoot_Branching = max(Decapitation, 0.01)^(1/1) * 2/(1 + BRC1) * gene_modifier + exogenous_supply"
     }
   ]
 }
@@ -441,7 +440,7 @@ The ODE equations use Hill functions instead of geometric mean. The BUILDER gene
     "dt": 0.01,
     "max_time": 50.0,
     "convergence_tolerance": 0.001,
-    "direction_threshold": 0.05,
+    "direction_threshold": 0.01,
     "activator_floor": 0.01
   },
   "equations": [
@@ -479,7 +478,7 @@ Both equation files use the same node-activator-inhibitor structure, but differe
 
 **Algebraic (algebraic_equations.json):**
 ```
-Node = (product(max(activators, 0.01)))^(1/n_activators) * min(1/max(product(inhibitors), 0.1), 10.0) * gene_modifier + exogenous_supply
+Node = (product(max(activators, 0.01)))^(1/n_activators) * (n_inhibitors + 1)/(1 + sum(inhibitors)) * gene_modifier + exogenous_supply
 Source nodes: Node = gene_modifier + exogenous_supply
 ```
 
@@ -659,7 +658,7 @@ MAX2 = source node (is_source: true)    — constitutively expressed
 
 **Equation:**
 ```
-SMXL678 = Activation * min(1/max(D14 * MAX2, 0.1), 10.0) * gene_modifier + exogenous
+SMXL678 = Activation * 3/(1 + D14 + MAX2) * gene_modifier + exogenous
 ```
 
 **Math trace — why this is powerful:**
@@ -839,7 +838,7 @@ Biosynthesis_Gene → Hormone (+1)    [activator — synthesis]
 Degradation_Gene → Hormone (-1)     [inhibitor — degradation]
 Signal → Degradation_Gene (+1)      [signal induces degradation]
 
-Hormone = max(Biosynthesis_Gene, 0.01)^(1/1) * min(1/max(Degradation_Gene, 0.1), 10) * gm + exo
+Hormone = max(Biosynthesis_Gene, 0.01)^(1/1) * 2/(1 + Degradation_Gene) * gm + exo
 ```
 
 **Worked example — Cytokinin balance:**
@@ -850,7 +849,7 @@ Strigolactone → CKX9 (+1)     [SL induces CK degradation]
 Nitrogen → IPT (+1)            [N promotes CK biosynthesis]
 Auxin → IPT (-1)               [Auxin represses CK biosynthesis]
 
-WT: CK = max(IPT=1, 0.01) * min(1/max(CKX9=1, 0.1), 10) * 1 = 1.0
+WT: CK = max(IPT=1, 0.01) * 2/(1 + CKX9=1) * 1 = 1 * 1.0 * 1 = 1.0
 Nitrogen high: IPT up → CK up → more branching
 max4 KO: SL drops → CKX9 drops → CK up → more branching (correct!)
 ```
@@ -877,7 +876,7 @@ aba2 KO:  ABA = (1 * 0.01)^0.5 = 0.1 → same effect
 ```
 PSY  → Carotenoid (+1)     [synthesis — rate-limiting phytoene synthase]
 CCD4 → Carotenoid (-1)     [oxidative cleavage — degradation/turnover]
-Carotenoid = max(PSY,0.01) * min(1/max(CCD4,0.1),10) * gm + exo
+Carotenoid = max(PSY,0.01) * 2/(1 + CCD4) * gm + exo
 
 ccd4 KO: cleavage lost → carotenoid accumulates (canonical yellow/orange-flesh
          phenotype in potato, peach, chrysanthemum) ✓
@@ -949,7 +948,7 @@ Strigolactone → D14 (+1)  [SL activates D14]
 D14 → D14 (-1)            [self-degradation after SL perception — D14 is consumed]
 D14 → SMXL678 (-1)        [D14 promotes SMXL degradation]
 
-Equation: D14 = max(SL, 0.01) * min(1/max(D14, 0.1), 10) * gm + exo
+Equation: D14 = max(SL, 0.01) * 2/(1 + D14) * gm + exo
 
 WT: D14 = max(1, 0.01) * min(1/1, 10) * 1 = 1.0 (self-consistent)
 SL applied: SL=2 → D14 tries to increase but self-inhibition limits it
@@ -1034,7 +1033,7 @@ For each non-source node:
 Node = Activation * Inhibition * Gene_Modifier + Exogenous_Supply
 
 Activation  = (product(max(activators, 0.01)))^(1/n_activators)    # geometric mean
-Inhibition  = min(1/max(product(inhibitors), 0.1), 10.0)           # bounded inverse
+Inhibition  = (n_inhibitors + 1)/(1 + sum(inhibitors))             # PSoup rule
 ```
 
 Source nodes (no activators AND no inhibitors):
@@ -1042,7 +1041,7 @@ Source nodes (no activators AND no inhibitors):
 Node = gene_modifier + exogenous_supply
 ```
 
-Parameters: `epsilon=0.1, K=10.0, activator_floor=0.01, damping=0.7, direction_threshold=0.05, max_iterations=100, convergence_tolerance=0.0001`
+Parameters: `activator_floor=0.01, damping=0.7, direction_threshold=0.01, max_iterations=100, convergence_tolerance=0.0001`
 
 ### ODE Hill Function Equations (`ode_equations.json`)
 
@@ -1059,7 +1058,7 @@ Source nodes (same as algebraic):
 Node = gene_modifier + exogenous_supply
 ```
 
-Default parameters: `K=1.0, n=2, dt=0.01, max_time=50.0, convergence_tolerance=0.001, direction_threshold=0.05, activator_floor=0.01`
+Default parameters: `K=1.0, n=2, dt=0.01, max_time=50.0, convergence_tolerance=0.001, direction_threshold=0.01, activator_floor=0.01`
 
 The ODE validator will later sweep `K` in `{0.1, 0.5, 1.0, 2.0, 5.0, 10.0}` and `n` in `{1, 2, 3, 4}` to find optimal parameters. The BUILDER writes the default (K=1.0, n=2) version.
 
@@ -1068,10 +1067,10 @@ The ODE validator will later sweep `K` in `{0.1, 0.5, 1.0, 2.0, 5.0, 10.0}` and 
 | Property | Algebraic | ODE (Hill) |
 |----------|-----------|------------|
 | Activation function | Geometric mean: `(∏ max(a, 0.01))^(1/n)` | Hill: `f(x) = x^n(K^n+1)/(K^n+x^n)` |
-| Inhibition function | Bounded inverse: `min(1/max(∏i, 0.1), K)` | Hill: `g(x) = (K^n+1)/(K^n+x^n)` |
-| Saturation | Hard ceiling at K=10 | Sigmoid saturation controlled by K,n |
+| Inhibition function | PSoup: `(n+1)/(1 + Σi)` | Hill: `g(x) = (K^n+1)/(K^n+x^n)` |
+| Saturation | Soft ceiling at (n_inhibitors + 1) | Sigmoid saturation controlled by K,n |
 | Sensitivity to KO | Strong (activator_floor=0.01) | Depends on K,n |
-| Parameters to set | Fixed (epsilon, K, floor, damping) | Default K=1.0, n=2 (optimizer tunes later) |
+| Parameters to set | Fixed (floor, damping) | Default K=1.0, n=2 (optimizer tunes later) |
 | Solver | Iterative fixed-point with damping | Euler integration (dx/dt = production - x) |
 
 Both equations use the SAME `activators` and `inhibitors` lists from the network edges. The node structure is identical — only the math differs.
@@ -1093,7 +1092,7 @@ All nodes = 1.0 when all inputs = 1.0. This is guaranteed by the math in BOTH eq
 
 **Algebraic:**
 - Activation: `(1.0)^(1/n) = 1.0`
-- Inhibition: `min(1/max(1.0, 0.1), 10.0) = 1.0`
+- Inhibition: `(1+1)/(1 + 1.0) = 2/2 = 1.0`
 - Result: `1.0 * 1.0 * 1.0 + 0.0 = 1.0`
 
 **ODE Hill (K=1.0, n=2):**
@@ -1104,7 +1103,7 @@ All nodes = 1.0 when all inputs = 1.0. This is guaranteed by the math in BOTH eq
 ### Equation Dynamics
 
 - **Geometric mean activation**: Adding more activators DILUTES the signal. `(a1 * a2)^(1/2)` is less than `a1` if `a2 < 1`. A node with 5 activators is HARDER to move than one with 1 activator.
-- **Bounded inverse inhibition**: If an inhibitor goes to 0 (KO), the bounded inverse hits K=10.0 (max). This is a STRONG upward push. If you add an inhibitor to a node, KO of that inhibitor will strongly increase the node's value.
+- **PSoup inhibition**: inhibitors are SUMMED, not multiplied. If a lone inhibitor goes to 0 (KO), the term rises to 2.0; with n inhibitors all at 0 it reaches (n+1). A moderate, non-saturating upward push — KO of an inhibitor raises the node's value without pinning it to a ceiling.
 - **Signal dilution through cascades**: Every intermediate step dampens the signal. `A->B->C->D->Phenotype` propagates a weaker signal than `A->Phenotype`. Sometimes the shortcut IS the better modeling choice.
 - **Feedback loops**: Can cause oscillation (damping=0.7 stabilizes) or non-convergence. Be aware when adding feedback edges.
 

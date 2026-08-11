@@ -167,7 +167,7 @@ A validation hook checks every JSON file you write. Files that don't match the s
     "total_perturbations": 220,
     "by_type": {"knockout": 150, "overexpression": 40, "treatment": 20, "rescue": 10}
   },
-  "direction_threshold": 0.05,
+  "direction_threshold": 0.01,
   "perturbations": [
     {
       "test_id": "T001",
@@ -208,7 +208,7 @@ A validation hook checks every JSON file you write. Files that don't match the s
     "not_in_network": 20,
     "phenotype_node": "Shoot_Branching"
   },
-  "direction_threshold": 0.05,
+  "direction_threshold": 0.01,
   "perturbations": [
     {
       "test_id": "T001",

@@ -13,7 +13,7 @@ ALL functions satisfy three invariants:
   3. Boundedness: outputs are finite and non-negative
 
 The agent picks which function to use for each node in equation_spec.json.
-If no spec exists, defaults to geomean + bounded_inverse (backward compatible).
+If no spec exists, defaults to geomean + psoup_inverse.
 
 IMPORTANT: This module is for the ALGEBRAIC validator only.
   - ODE validator always uses Hill functions (separate math framework)
@@ -48,9 +48,12 @@ min_pool:
 INHIBITION FUNCTIONS (for combining multiple inhibitors)
 ================================================================================
 
-bounded_inverse (default):
-  g(x1,...,xn) = min(1 / max(product(xi), epsilon), K)
-  Proportional de-repression on KO. Ceiling at K.
+psoup_inverse (default):
+  g(x1,...,xn) = (n + 1) / (1 + sum(xi))
+  PSoup rule: "the number of inhibitors plus 1, divided by the sum of
+  inhibitors plus 1". Inhibitors are SUMMED. Self-normalising at WT for any n;
+  de-repression is capped at (n+1) with no epsilon/K needed.
+  ('bounded_inverse' is kept as a back-compat alias for this function.)
 
 independent_inverse:
   g(x1,...,xn) = product(min(1 / max(xi, epsilon), K))
@@ -152,18 +155,20 @@ def act_min_pool(values: List[float], floor: float = DEFAULT_ACTIVATOR_FLOOR,
 # INHIBITION FUNCTIONS
 # ============================================================================
 
-def inh_bounded_inverse(values: List[float], epsilon: float = DEFAULT_EPSILON,
-                        K: float = DEFAULT_K, **kwargs) -> float:
-    """Bounded inverse inhibition (default).
-    g(x1,...,xn) = min(1 / max(product(xi), epsilon), K)
-    Product of all inhibitors, then single bounded inverse.
+def inh_psoup_inverse(values: List[float], **kwargs) -> float:
+    """PSoup inhibition (default).
+    g(x1,...,xn) = (n + 1) / (1 + sum(xi))
+
+    "The number of inhibitors plus 1, divided by the sum of inhibitors plus 1"
+    (PSoup algebraic rules). Inhibitors are SUMMED, not multiplied.
+
+    Self-normalising: g(1,...,1) = (n+1)/(n+1) = 1.0 for any n, so no epsilon
+    floor or K ceiling is needed. De-repression is naturally capped at (n+1)
+    when every inhibitor is knocked out.
     """
     if not values:
         return 1.0
-    product = 1.0
-    for v in values:
-        product *= v
-    return min(1.0 / max(product, epsilon), K)
+    return (len(values) + 1.0) / (1.0 + sum(values))
 
 
 def inh_independent_inverse(values: List[float], epsilon: float = DEFAULT_EPSILON,
@@ -206,7 +211,11 @@ ACTIVATION_FUNCTIONS = {
 }
 
 INHIBITION_FUNCTIONS = {
-    'bounded_inverse': inh_bounded_inverse,
+    'psoup_inverse': inh_psoup_inverse,
+    # Back-compat alias: existing equation_spec.json files name 'bounded_inverse'.
+    # They still load, but now resolve to the PSoup term — the old bounded
+    # inverse min(1/max(product, epsilon), K) is no longer available.
+    'bounded_inverse': inh_psoup_inverse,
     'independent_inverse': inh_independent_inverse,
     'linear_clamp': inh_linear_clamp,
 }
@@ -221,7 +230,7 @@ def get_default_spec() -> Dict:
     return {
         'version': '1.0',
         'default_activation': 'geomean',
-        'default_inhibition': 'bounded_inverse',
+        'default_inhibition': 'psoup_inverse',
         'default_params': {
             'epsilon': DEFAULT_EPSILON,
             'K_inhibition': DEFAULT_K,
@@ -252,7 +261,7 @@ def validate_equation_spec(spec: Dict) -> List[str]:
         errors.append(f"Unknown default activation: '{default_act}'. "
                       f"Valid: {list(ACTIVATION_FUNCTIONS.keys())}")
 
-    default_inh = spec.get('default_inhibition', 'bounded_inverse')
+    default_inh = spec.get('default_inhibition', 'psoup_inverse')
     if default_inh not in INHIBITION_FUNCTIONS:
         errors.append(f"Unknown default inhibition: '{default_inh}'. "
                       f"Valid: {list(INHIBITION_FUNCTIONS.keys())}")
@@ -344,7 +353,7 @@ def execute_equation(
     act_func = ACTIVATION_FUNCTIONS[act_name]
 
     # Determine inhibition function
-    inh_name = node_spec.get('inhibition', spec.get('default_inhibition', 'bounded_inverse'))
+    inh_name = node_spec.get('inhibition', spec.get('default_inhibition', 'psoup_inverse'))
     inh_func = INHIBITION_FUNCTIONS[inh_name]
 
     # Get activator values

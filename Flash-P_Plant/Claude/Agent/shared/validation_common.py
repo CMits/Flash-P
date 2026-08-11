@@ -381,13 +381,15 @@ def find_network_json_path(network_dir: str) -> Optional[Path]:
 # DIRECTION CLASSIFICATION
 # ============================================================================
 
-def classify_direction(ratio: float, threshold: float = 0.05) -> str:
+def classify_direction(ratio: float, threshold: float = 0.01) -> str:
     """
     Classify direction from a ratio (perturbed/baseline).
 
     Args:
         ratio: perturbed_value / baseline_value
-        threshold: +-threshold for unchanged classification (default 0.05 = 5%)
+        threshold: +-threshold for unchanged classification (default 0.01 = 1%).
+            Used by the algebraic and ODE engines. RWR does NOT use this function —
+            it classifies a signed propagation signal against its own +-1e-5 band.
 
     Returns:
         "increased", "decreased", or "unchanged"

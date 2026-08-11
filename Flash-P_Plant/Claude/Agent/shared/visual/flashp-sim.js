@@ -87,7 +87,7 @@
   }
 
   function classifyDirection(ratio, threshold) {
-    threshold = threshold == null ? 0.05 : threshold;
+    threshold = threshold == null ? 0.01 : threshold;
     if (ratio > 1 + threshold) return 'increased';
     if (ratio < 1 - threshold) return 'decreased';
     return 'unchanged';
@@ -100,11 +100,11 @@
       .sort(function (a, b) { return a.id < b.id ? -1 : a.id > b.id ? 1 : 0; });
   }
 
-  // ---- Algebraic (Flash-P): geometric activation, bounded inhibition -------
+  // ---- Algebraic (Flash-P): geometric activation, PSoup inhibition ---------
 
   var ALG = {
-    epsilon: 0.1, K: 10, activatorFloor: 0.01,
-    damping: 0.7, maxIter: 100, tol: 1e-4, directionThreshold: 0.05,
+    activatorFloor: 0.01,
+    damping: 0.7, maxIter: 100, tol: 1e-4, directionThreshold: 0.01,
   };
 
   function runAlgebraic(net, file, perturbation, baseline, baselineLabel) {
@@ -132,11 +132,12 @@
         activation = Math.pow(prod, 1 / eq.activators.length);
       }
       if (eq.inhibitors.length) {
-        var iprod = 1;
+        // PSoup: (n + 1) / (1 + sum(inhibitors)). Summed, not multiplied.
+        var isum = 0;
         for (k = 0; k < eq.inhibitors.length; k++) {
-          iprod *= values[eq.inhibitors[k]] != null ? values[eq.inhibitors[k]] : 1;
+          isum += values[eq.inhibitors[k]] != null ? values[eq.inhibitors[k]] : 1;
         }
-        inhibition = Math.min(1 / Math.max(iprod, ALG.epsilon), ALG.K);
+        inhibition = (eq.inhibitors.length + 1) / (1 + isum);
       }
       return Math.max(activation * inhibition * geneMod + (exo[id] != null ? exo[id] : 0), 0);
     }
@@ -249,7 +250,7 @@
 
   // ---- ODE: Hill-function dynamics, explicit Euler ------------------------
 
-  var ODE = { K: 1.0, n: 2, activatorFloor: 0.01, dt: 0.1, maxTime: 50, tol: 1e-4, directionThreshold: 0.05 };
+  var ODE = { K: 1.0, n: 2, activatorFloor: 0.01, dt: 0.1, maxTime: 50, tol: 1e-4, directionThreshold: 0.01 };
 
   function hillActivation(x, K, n) {
     if (x <= 0) return 0;

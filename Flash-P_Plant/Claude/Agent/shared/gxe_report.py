@@ -347,9 +347,10 @@ def main():
     L.append("- **gxe** is the log2 ratio-of-ratios `[gene/WT]@env ÷ [gene/WT]@ambient`. "
              "0 = the gene acts the same with/without the environment (no interaction); "
              "sign = whether the environment amplifies or dampens the gene's effect.")
-    L.append("- Interactions come from saturation of the bounded-inverse term and from "
-             "genes/environments sharing downstream nodes; a clean single multiplication "
-             "gives ~0. See `scan_gxe.py` header for the full rationale.")
+    L.append("- Interactions come from co-inhibition of a shared node (the PSoup term sums "
+             "all inhibitors into one denominator) and from genes/environments sharing "
+             "downstream nodes; a clean single multiplication gives ~0. See `scan_gxe.py` "
+             "header for the full rationale.")
     L.append("- Magnitudes scale with dose; use the dose sweep to find the informative range.")
 
     (out_dir / "GXE_REPORT.md").write_text("\n".join(L) + "\n")

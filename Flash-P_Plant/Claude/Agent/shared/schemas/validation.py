@@ -35,7 +35,7 @@ class DetailedResult(BaseModel):
     comparison_baseline_value: float = 1.0
     ratio: float
     log2_fold_change: float
-    direction_threshold: float = 0.05
+    direction_threshold: float = 0.01
     predicted_direction: Direction
     expected_direction: Direction
     correct: bool
