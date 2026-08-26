@@ -217,7 +217,8 @@ def _resolve_one(rec: dict, store: Store, cfg: Config) -> dict:
     paper = res.paper or {}
     detected = "" if curated else species.detect_species(
         res.support.quote if res.support else "",
-        paper.get("title", ""), paper.get("abstract", ""))
+        paper.get("title", ""), paper.get("abstract", ""),
+        store=store, offline=cfg.offline)
     row.update({
         "species": curated or detected,
         "species_source": "curated" if curated else ("paper" if detected else ""),
