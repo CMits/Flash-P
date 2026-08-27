@@ -20,6 +20,7 @@ rebuilds it.
 
 from __future__ import annotations
 
+import json
 import os
 import sqlite3
 import threading
@@ -64,6 +65,16 @@ CREATE TABLE IF NOT EXISTS miss (
     doi        TEXT PRIMARY KEY,
     reason     TEXT DEFAULT '',
     checked_at REAL DEFAULT 0
+);
+-- species.py's genus allowlist, extended live: the static seed list
+-- (species_data.json) cannot anticipate every crop a network gets built for, so an
+-- unseeded genus is looked up in NCBI Taxonomy once and kept here. species_json is a
+-- JSON array of lowercase epithets — empty means "checked, NCBI has nothing" (still
+-- worth caching, so a genus that is not real is not re-queried every run).
+CREATE TABLE IF NOT EXISTS genus (
+    genus        TEXT PRIMARY KEY,
+    species_json TEXT NOT NULL DEFAULT '[]',
+    checked_at   REAL DEFAULT 0
 );
 """
 
@@ -214,6 +225,38 @@ class Store:
                    ON CONFLICT(doi) DO UPDATE SET
                      reason=excluded.reason, checked_at=excluded.checked_at""",
                 (d, reason, time.time()))
+            self.con.commit()
+
+    # -- genus allowlist (species.py, extended live) ------------------------
+    def get_genus(self, genus: str) -> Optional[set]:
+        """Cached epithets for this genus, or ``None`` if never looked up.
+
+        ``None`` and "looked up, found nothing" (an empty set) are different answers —
+        the caller needs to tell "go check NCBI" from "NCBI already said no" apart.
+        """
+        g = (genus or "").strip().lower()
+        if not g:
+            return None
+        with self._lock:
+            row = self.con.execute(
+                "SELECT species_json FROM genus WHERE genus = ?", (g,)).fetchone()
+            if row is None:
+                return None
+            try:
+                return set(json.loads(row["species_json"]))
+            except (TypeError, ValueError):
+                return set()
+
+    def put_genus(self, genus: str, species: set) -> None:
+        g = (genus or "").strip().lower()
+        if not g:
+            return
+        with self._lock:
+            self.con.execute(
+                """INSERT INTO genus (genus, species_json, checked_at) VALUES (?,?,?)
+                   ON CONFLICT(genus) DO UPDATE SET
+                     species_json=excluded.species_json, checked_at=excluded.checked_at""",
+                (g, json.dumps(sorted(species)), time.time()))
             self.con.commit()
 
     # -- housekeeping ------------------------------------------------------

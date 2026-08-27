@@ -40,6 +40,7 @@ __all__ = [
     "openalex_by_doi", "openalex_search",
     "epmc_by_doi", "epmc_by_dois", "epmc_search", "epmc_fulltext",
     "pubmed_search", "pubmed_by_pmids",
+    "ncbi_taxonomy_species", "TAXONOMY_JUNK_EPITHETS",
     "reconstruct_abstract", "bare_doi", "doi_slug", "metered_out",
 ]
 
@@ -645,6 +646,83 @@ def pubmed_search(query: str, per_page: int = 8) -> List[PaperRecord]:
     ids = (((data or {}).get("esearchresult") or {}).get("idlist") or []) \
         if isinstance(data, dict) else []
     return pubmed_by_pmids(ids)
+
+
+# ---------------------------------------------------------------------------
+# NCBI Taxonomy (species-name validation, on demand)
+# ---------------------------------------------------------------------------
+# NCBI Taxonomy tracks hybrid crosses and cultivar placeholders at "species" rank too —
+# "Triticum hybrid cultivar", "Triticum aestivum x Triticosecale sp." — and a naive
+# genus+second-word split reads their second token as if it were a real epithet. None of
+# these words is a genuine species epithet in any genus, so they are dropped outright.
+TAXONOMY_JUNK_EPITHETS = {
+    "hybrid", "cultivar", "sp", "spp", "aff", "cf", "group", "complex",
+    "unclassified", "uncultured", "environmental", "clade", "var", "forma", "form",
+}
+
+
+def ncbi_taxonomy_species(genus: str, retmax_page: int = 500, max_pages: int = 4) -> set:
+    """Every species-rank epithet NCBI Taxonomy knows for one genus, lowercased.
+
+    This is ``species.py``'s allowlist extended live: a network built for a crop the
+    static seed list (``species_data.json``) never anticipated still needs its species
+    recognised, not silently guessed at from whatever else the abstract mentions. Capped
+    at ``max_pages`` x ``retmax_page`` taxon ids so one implausibly large genus cannot
+    stall a verification run — a signaling-network paper's genus is never that big in
+    practice, and the cap is generous enough (2,000 by default) that it will not bite.
+
+    Returns an empty set on any failure, a misspelt genus, or a genus NCBI does not
+    recognise — never raises, since a failed lookup must read as "unknown", exactly like
+    every other miss in this module, not crash the claim that triggered it.
+    """
+    g = (genus or "").strip()
+    if not g or not g[0].isalpha():
+        return set()
+    term = f"{g}[Subtree] AND species[Rank]"
+    ids: List[str] = []
+    retstart = 0
+    for _ in range(max(1, max_pages)):
+        params = urllib.parse.urlencode({
+            "db": "taxonomy", "term": term, "retmode": "json",
+            "retmax": retmax_page, "retstart": retstart,
+        })
+        data = _fetch_json(f"{NCBI}/esearch.fcgi?{params}", label="taxonomy/esearch")
+        result = (data or {}).get("esearchresult") if isinstance(data, dict) else None
+        batch = (result or {}).get("idlist") or []
+        ids.extend(batch)
+        if not batch:
+            break
+        try:
+            count = int((result or {}).get("count", 0))
+        except (TypeError, ValueError):
+            count = 0
+        retstart += len(batch)
+        if retstart >= count:
+            break
+    if not ids:
+        return set()
+
+    epithets: set = set()
+    low = g.lower()
+    for i in range(0, len(ids), 200):
+        chunk = ids[i:i + 200]
+        params = urllib.parse.urlencode({
+            "db": "taxonomy", "id": ",".join(chunk), "retmode": "json",
+        })
+        data = _fetch_json(f"{NCBI}/esummary.fcgi?{params}", label="taxonomy/esummary")
+        result = (data or {}).get("result") if isinstance(data, dict) else None
+        for uid in (result or {}).get("uids", []):
+            name = ((result or {}).get(uid) or {}).get("scientificname", "")
+            if not name or " x " in name:            # hybrid cross
+                continue
+            parts = name.split()
+            if len(parts) < 2:
+                continue
+            gpart, sp = parts[0].lower(), parts[1].lower()
+            if (gpart == low and len(sp) >= 3 and sp.isalpha()
+                    and sp not in TAXONOMY_JUNK_EPITHETS):
+                epithets.add(sp)
+    return epithets
 
 
 # ---------------------------------------------------------------------------
