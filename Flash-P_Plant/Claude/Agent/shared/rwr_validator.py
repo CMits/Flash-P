@@ -883,11 +883,23 @@ def main():
             filtered_args.append(args[i])
             i += 1
 
+    if not filtered_args:
+        print("Error: No network directory specified.")
+        sys.exit(1)
+
     if filtered_args[0] == '--all':
-        network_dirs = [
-            d for d in script_dir.iterdir()
+        # networks live under <project_root>/networks/<Trait>/, not next to this script —
+        # optionally pass the base directory explicitly: --all <networks_dir>
+        base = Path(filtered_args[1]) if len(filtered_args) > 1 else Path.cwd() / 'networks'
+        network_dirs = sorted(
+            d for d in (base.iterdir() if base.exists() else [])
             if d.is_dir() and (d / 'network' / 'network.json').exists()
-        ]
+        )
+        if not network_dirs:
+            print(f"Error: no networks found under {base} "
+                  f"(expected <trait>/network/network.json). "
+                  f"Pass the base directory explicitly: --all <networks_dir>")
+            sys.exit(1)
     else:
         network_dirs = [Path(d) for d in filtered_args]
 

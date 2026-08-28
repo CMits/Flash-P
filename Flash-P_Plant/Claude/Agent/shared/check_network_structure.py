@@ -659,8 +659,9 @@ def main() -> int:
     parser.add_argument("network_dir", type=str,
                         help="Path to a phenotype network directory "
                              "(expects network/network.json inside)")
-    parser.add_argument("--dry-run", action="store_true", default=True,
-                        help="Report only, no writes (default)")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="With --fix, preview what would be fixed without writing. "
+                             "Has no effect without --fix (report-only is already the default).")
     parser.add_argument("--fix", action="store_true",
                         help="Auto-repair safely-fixable checks "
                              "(connectivity, is_source)")
@@ -679,17 +680,15 @@ def main() -> int:
 
     report = audit_network(network_path)
 
-    # Apply fixes if requested
-    fix_mode = args.fix and not args.dry_run if args.fix else False
-    # Resolve flag conflict: if --fix is passed, override --dry-run default
+    # Apply fixes if requested — unless --dry-run says preview only.
     if args.fix:
-        fix_mode = True
+        fix_mode = not args.dry_run
         # Only fix if there is something auto-fixable
         auto_fixable = (
             not report["check_1_connectivity"]["passed"]
             or not report["check_4_is_source"]["passed"]
         )
-        if auto_fixable:
+        if auto_fixable and fix_mode:
             fixes = fix_network(network_path, report, backup=args.backup)
             # Re-run audit after fix
             report = audit_network(network_path)
@@ -698,6 +697,11 @@ def main() -> int:
             print("--- Fixes applied ---")
             for f in fixes:
                 print(f"  {f}")
+        elif auto_fixable:  # auto_fixable and args.dry_run
+            print(render_report(report, fix_mode=False))
+            print()
+            print("--- Fixes available (--dry-run set; nothing written) ---")
+            print("  Re-run without --dry-run to apply.")
         else:
             print(render_report(report, fix_mode=False))
             print()
