@@ -193,7 +193,20 @@ Accuracy alone is class-imbalance-sensitive and scale-blind. We report quality i
   supplementary/
     Table_S1..S9 *.csv | master_test_level.csv | Fig_Data/
   provenance/  pipeline_manifest.json
+  epistasis/                       <- /run-flashp-epistasis only
+    epistasis_doubles.tsv
+  gxe/                             <- /run-flashp-gxe only
+    gxe_anchored.tsv | gxe_cross.tsv | GXE_REPORT.md
+  idmapping/                       <- /run-flashp-idmapping only
+    node_dossiers.json             <- evidence, routes and candidates per gene node
+    judgements.jsonl               <- the mapper subagent's decision per node
+    mapping.tsv | unresolved.tsv   <- 19 cols; relation + confidence per node
+    network.idmapped.json          <- annotated COPY (+gid); network.json is never modified
+    anchor_agreement.tsv | report.html
 ```
+
+The last three are post-pipeline analyses, not numbered steps: each is written only if its
+command has been run, and nothing in steps 1–7 reads them.
 
 ### Supplementary principle
 - S1 = everything FOUND (edges). S2 = everything FOUND (perturbations).

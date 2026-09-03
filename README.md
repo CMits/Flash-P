@@ -142,10 +142,12 @@ available. Run **`/run-flashp-help`** at any time to print this list from inside
 | `/run-flashp-studio` | Build the **FLASH-P Studio** &mdash; one self-contained, offline HTML app to browse, view (clickable, DOI links), **export** each network as PNG/SVG, and **perturbate** all your networks (KO/KD/OE + treatments; Algebraic / RWR / ODE solvers, live charts). | `/run-flashp-studio <networks dir>` |
 | `/run-flashp-epistasis` | Gene &times; gene epistasis scan over an existing network &mdash; every single + double perturbation, classified by interaction. *(Plant)* | `/run-flashp-epistasis <network dir>` |
 | `/run-flashp-gxe` | Gene &times; environment (G&times;E) scan over an existing network &mdash; dose-swept, with a report. *(Plant)* | `/run-flashp-gxe <network dir>` |
+| `/run-flashp-idmapping` | Map the gene-symbol node ids in an existing network to stable gene model identifiers &mdash; offline cache first, pooled Ensembl/NCBI/UniProt for the residue. Writes an annotated **copy**; the original `network.json` is never touched. *(Plant)* | `/run-flashp-idmapping <network dir>` |
 | `/run-flashp-help` | Print this command list from inside Claude Code (auto-generated from the commands available in the folder). | `/run-flashp-help` |
 
 > `/run-flashp`, `/run-flashp-studio`, and `/run-flashp-help` ship in **Plant, Animal, and Medical**;
-> `/run-flashp-epistasis` and `/run-flashp-gxe` currently ship in the **Plant** variant.
+> `/run-flashp-epistasis`, `/run-flashp-gxe` and `/run-flashp-idmapping` currently ship in
+> the **Plant** variant.
 
 ---
 

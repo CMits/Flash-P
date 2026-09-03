@@ -63,7 +63,10 @@ Flash-P_Animal/.claude/worktrees/
 *.tmp
 
 # Provenance paper cache — abstracts and open-access full texts fetched from
-# OpenAlex / Europe PMC. Regenerable, machine-local, and large.
+# OpenAlex / Europe PMC. Also the gene-identifier mapper's derived layers under idmap/
+# (NCBI descriptions, PLAZA pair tables, Compara projections). Regenerable, machine-local,
+# and large. The mapper's *committed* offline name cache is a separate root and lives at
+# Flash-P_Plant/Claude/Agent/shared/idmap/resolver/cache/.
 .flashp_cache/
 
 # README HTML preview (regenerable from README.md via pandoc)

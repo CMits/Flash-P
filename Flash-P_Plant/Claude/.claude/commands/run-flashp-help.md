@@ -24,7 +24,7 @@ A short intro line, then a markdown table with one row per command:
 | `/<name>` | (its `description`, trimmed to one line) | `/<name> <argument-hint>` |
 
 Order the rows: **`/run-flashp` first** (the full pipeline build), then any analysis commands present
-(`/run-flashp-epistasis`, `/run-flashp-gxe`), then `/run-flashp-studio`, and finally `/run-flashp-help`
+(`/run-flashp-epistasis`, `/run-flashp-gxe`, `/run-flashp-idmapping`), then `/run-flashp-studio`, and finally `/run-flashp-help`
 (this command) last. Only include commands that actually exist here.
 
 Close with one line: *pipeline outputs are written to `networks/<trait>/`, and this list reflects

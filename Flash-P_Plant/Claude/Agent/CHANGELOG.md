@@ -7,6 +7,30 @@
 > **AGENT-SPEC version** log (CURATOR/BUILDER/etc. individually versioned) that predates the
 > git-tag release system — kept as historical detail, not renumbered.
 
+## [Unreleased]
+
+### Added
+- **`/run-flashp-idmapping`** (Plant): maps the gene nodes of a built network to stable gene
+  model identifiers, using the literature evidence Step 1.6 already collected. Candidates are
+  scored by how many *independent* routes agree — a 267-species offline name cache, identifiers
+  stated in the node's own cited papers, pooled Ensembl/NCBI/UniProt, and ortholog projection
+  corroborated across Ensembl Compara, Gramene and PLAZA — and the new **`flashp-gene-id-mapper`**
+  subagent (opus) judges every node, adjudicating whether a paper genuinely pairs an accession
+  with a gene name before anything is projected from it.
+- Writes `<NET>/idmapping/`: `mapping.tsv` and `unresolved.tsv` (typed `relation` +
+  `confidence` per node), `network.idmapped.json`, `anchor_agreement.tsv`, `report.html`.
+  **`network/network.json` is never modified** — the annotated network is a copy, because the
+  schema drops unknown keys on the next round-trip and a `gid` written there would be lost.
+- **Committed offline name cache** (`Agent/shared/idmap/resolver/cache/`, 267 species, ~9.7 MB):
+  a fresh clone can map a network with no downloads. Description layers, ortholog projections
+  and PLAZA pair tables are built per species on first use into `.flashp_cache/idmap/` and are
+  never committed; `FLASHP_IDMAP_CACHE` and `FLASHP_IDMAP_RESOLVER` relocate either root.
+
+### Notes
+- No accuracy figure is claimed. Coverage is always reported next to the species' own symbol
+  coverage, because 30% on a species with 475 named genes is not the same result as 30% on
+  Arabidopsis, and `unresolved` is frequently the correct answer rather than a failure.
+
 ## [v1.1.0] - 2026-08-05
 
 ### Added
