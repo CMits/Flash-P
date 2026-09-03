@@ -1,0 +1,7 @@
+species	organism_id	n_rows	n_described	join	join_rate
+sorghum_bicolor	454	34129	27660	prefix 'Sobic.' -> 'SORBI_3'	1.0
+populus_trichocarpa	444	42950	36354	identity (after version canonicalisation)	0.9276
+physcomitrium_patens	318	32926	23482	identity (after version canonicalisation)	1.0
+solanum_tuberosum	448	39028	29570	identity (after version canonicalisation)	1.0
+solanum_lycopersicum_gca000188115v5cm	390	34725	29092	identity (after version canonicalisation)	0.9802
+arabidopsis_thaliana	447	27655	25162	identity (after version canonicalisation)	0.9778
