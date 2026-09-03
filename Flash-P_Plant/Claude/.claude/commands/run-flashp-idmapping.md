@@ -55,7 +55,9 @@ thread.
    Exit codes: **2** = not a FLASH-P network directory. **3** = no `data/evidence.json`; offer either
    `python Agent/shared/idmap/backfill_evidence.py --network <NET> --out <NET>/idmapping/backfilled`
    or re-running with `--allow-no-evidence`, and say that confidence drops accordingly. **4** = no
-   mappable gene nodes. Relay the message and stop in each case.
+   mappable gene nodes. **6** = `<NET>/idmapping/` still holds output from the superseded mapper
+   (24 networks do); `--force` moves it to `idmapping_v1/` and continues — say that it is kept, not
+   deleted. Relay the message and stop in each case.
 
 3. **Dispatch the `flashp-gene-id-mapper` subagent** on `<NET>`. It reads the dossiers, adjudicates the
    identifiers cited papers name, writes `judgements.jsonl`, and runs `emit_mapping.py` itself. It runs

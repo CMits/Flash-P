@@ -19,9 +19,11 @@ Exit codes:
     2  not a Flash-P network directory
     3  no data/evidence.json (pre-Step-1.6 network) -- see --allow-no-evidence
     4  no mappable gene nodes
+    6  <NET>/idmapping/ holds output from the superseded mapper -- see --force
 """
 import argparse
 import os
+import shutil
 import subprocess
 import sys
 
@@ -65,6 +67,8 @@ def main():
     ap.add_argument("--species", help="comma-separated extra species for the identifier panel")
     ap.add_argument("--workers", type=int, help="nodes gathered concurrently (default 3)")
     ap.add_argument("--limit", type=int, help="only this many nodes, for a quick look")
+    ap.add_argument("--force", action="store_true",
+                    help="move a superseded mapper's output aside to <outdir>_v1 and continue")
     args = ap.parse_args()
 
     net = os.path.abspath(args.net_dir)
@@ -74,6 +78,25 @@ def main():
         return common.EXIT_NOT_A_NETWORK
 
     outdir = args.out or os.path.join(net, "idmapping")
+
+    # The superseded map_gene_ids.py wrote to this same directory, and 24 networks still
+    # carry its output. Its network.idmapped.json would be overwritten while candidates.tsv
+    # and report.md survived beside the new files, leaving a directory that is half one
+    # mapper and half the other. Move the old run aside rather than blending the two.
+    stale = [f for f in ("candidates.tsv", "report.md", "corroboration_packet.txt")
+             if os.path.isfile(os.path.join(outdir, f))]
+    if stale:
+        if not args.force:
+            print(f"{os.path.relpath(outdir)} holds output from the superseded mapper "
+                  f"({', '.join(stale)}).\nRe-run with --force to move it to "
+                  f"{os.path.basename(outdir)}_v1/ and continue.", file=sys.stderr)
+            return common.EXIT_STALE_OUTPUT
+        keep = outdir + "_v1"
+        if os.path.exists(keep):
+            shutil.rmtree(keep)
+        shutil.move(outdir, keep)
+        print(f"moved the superseded run to {os.path.relpath(keep)}", file=sys.stderr)
+
     os.makedirs(outdir, exist_ok=True)
     doss = os.path.join(outdir, "node_dossiers.json")
 

@@ -26,6 +26,7 @@ EXIT_NOT_A_NETWORK = 2    # no network/network.json and no flat network.json
 EXIT_NO_EVIDENCE = 3      # pre-Step-1.6 network; backfill or pass --allow-no-evidence
 EXIT_NO_GENE_NODES = 4    # nothing mappable in this network
 EXIT_JUDGEMENT_REJECTED = 5   # a judgement broke an output rule; fix it, do not force it
+EXIT_STALE_OUTPUT = 6         # <NET>/idmapping/ holds output from the superseded mapper
 
 
 def _flashp_version():
