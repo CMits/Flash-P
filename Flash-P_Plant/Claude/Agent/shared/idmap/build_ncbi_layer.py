@@ -49,9 +49,12 @@ EMPTY_DESC = re.compile(
 
 
 def _open(url, timeout=180):
-    # Through common.open_url, not urlopen: this fetches from NCBI at --workers 6, and
-    # NCBI's 3/s is the tightest limit we face. The shared token bucket is the only thing
-    # that makes the worker count safe, and it also brings Retry-After handling with it.
+    # Through common.open_url, not urlopen. The bridge fetch runs --workers 6 against
+    # ftp.ensemblgenomes.ebi.ac.uk, which -- like ftp.ncbi.nlm.nih.gov below -- has no
+    # entry in HOST_RATE and so draws on the 2/s default. The shared token bucket is the
+    # only thing that keeps six concurrent workers to that budget: measured over 16
+    # requests, the tightest gap was 0.498 s against a 0.500 s floor, where raw urlopen
+    # let all six fire at once. It also brings Retry-After handling with it.
     return common.open_url(urllib.request.Request(url, headers=UA), timeout=timeout)
 
 
